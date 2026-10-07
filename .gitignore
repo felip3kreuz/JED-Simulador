@@ -28,3 +28,6 @@ conexao_online.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Segredo SMTP local do servidor
+servidor_email.json

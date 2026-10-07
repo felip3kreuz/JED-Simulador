@@ -1,21 +1,10 @@
+import Link from "next/link";
 import CoreStatus from "./core-status";
 
 const roles = [
-  {
-    name: "Aluno",
-    description: "Decisões, operação da empresa, indicadores e sincronização.",
-    stage: "Interface no W5",
-  },
-  {
-    name: "Mentor",
-    description: "Turmas, cenários, rodadas, resultados e acompanhamento.",
-    stage: "Interface no W6",
-  },
-  {
-    name: "Administrador",
-    description: "Usuários, mentores, configuração, segurança e operação.",
-    stage: "Interface no W6",
-  },
+  { name: "Aluno", description: "Decisões, operação da empresa, indicadores e sincronização.", stage: "Painel autenticado" },
+  { name: "Mentor", description: "Turmas, cenários, rodadas, resultados e acompanhamento.", stage: "Painel autenticado" },
+  { name: "Administrador", description: "Usuários, mentores, configuração, segurança e operação.", stage: "Painel autenticado" },
 ];
 
 export default function Home() {
@@ -27,27 +16,29 @@ export default function Home() {
           <div className="brand-name">JED Simulador</div>
           <div className="brand-edition">Web · RC1.8</div>
         </div>
-        <span className="build-badge">W3</span>
+        <Link className="header-login" href="/login">Entrar</Link>
+        <span className="build-badge">W4</span>
       </header>
 
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Primeira execução web</p>
-          <h1>O mesmo motor do JED, agora no navegador.</h1>
+          <p className="eyebrow">JED Web conectado</p>
+          <h1>O motor e o servidor do JED, no navegador.</h1>
           <p className="lede">
-            Esta build valida a aplicação Next.js, a execução do motor Go via WebAssembly e a
-            estrutura que receberá os três papéis do sistema.
+            A aplicação mantém o motor Go em WebAssembly e agora também autentica as mesmas contas
+            usadas pelo JED Servidor RC1.8.
           </p>
+          <div className="hero-actions">
+            <Link className="primary-button link-button" href="/login">Entrar no JED</Link>
+          </div>
         </div>
-        <div className="hero-panel">
-          <CoreStatus />
-        </div>
+        <div className="hero-panel"><CoreStatus /></div>
       </section>
 
       <section className="section-block" aria-labelledby="perfis">
         <div className="section-heading">
           <p className="eyebrow">Perfis</p>
-          <h2 id="perfis">Uma interface para cada papel</h2>
+          <h2 id="perfis">Uma sessão para cada papel</h2>
         </div>
         <div className="role-grid">
           {roles.map((role) => (
@@ -55,9 +46,7 @@ export default function Home() {
               <div className="role-kicker">{role.stage}</div>
               <h3>{role.name}</h3>
               <p>{role.description}</p>
-              <button type="button" disabled>
-                Em preparação
-              </button>
+              <Link className="card-link" href="/login">Acessar</Link>
             </article>
           ))}
         </div>
@@ -65,25 +54,19 @@ export default function Home() {
 
       <section className="architecture" aria-labelledby="arquitetura">
         <div>
-          <p className="eyebrow">Arquitetura atual</p>
-          <h2 id="arquitetura">A interface mudou. O motor não.</h2>
+          <p className="eyebrow">Arquitetura W4</p>
+          <h2 id="arquitetura">O token fica fora do JavaScript.</h2>
         </div>
         <div className="architecture-flow" aria-label="Fluxo da aplicação">
-          <span>Next.js</span>
-          <b>→</b>
-          <span>WebAssembly</span>
-          <b>→</b>
-          <span>JED Core · Go</span>
+          <span>Navegador</span><b>→</b><span>Next.js BFF</span><b>→</b><span>JED Servidor</span>
         </div>
         <p className="architecture-note">
-          A conexão autenticada com o JED Servidor entra no W4. Nesta etapa, nenhum dado de usuário
-          é enviado para a rede.
+          O login é encaminhado pelo backend do JED Web. A sessão do servidor é armazenada em cookie
+          Secure + HttpOnly, enquanto o JED Core continua executando localmente em WebAssembly.
         </p>
       </section>
 
-      <footer>
-        JED Simulador · Web W3 · Base v2.0 RC1.8
-      </footer>
+      <footer>JED Simulador · Web W4 · Base v2.0 RC1.8</footer>
     </main>
   );
 }

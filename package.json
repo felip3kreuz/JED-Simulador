@@ -1,6 +1,6 @@
 {
   "name": "jed-simulador",
-  "version": "2.0.0-rc1.8-w4",
+  "version": "2.0.0-rc1.8-w5.0",
   "private": true,
   "scripts": {
     "build": "bash scripts/build-web.sh",

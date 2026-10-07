@@ -17,16 +17,16 @@ export default function Home() {
           <div className="brand-edition">Web · RC1.8</div>
         </div>
         <Link className="header-login" href="/login">Entrar</Link>
-        <span className="build-badge">W4</span>
+        <span className="build-badge">W5.0</span>
       </header>
 
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">JED Web conectado</p>
+          <p className="eyebrow">JED Web · W5.0</p>
           <h1>O motor e o servidor do JED, no navegador.</h1>
           <p className="lede">
-            A aplicação mantém o motor Go em WebAssembly e agora também autentica as mesmas contas
-            usadas pelo JED Servidor RC1.8.
+            A aplicação mantém o motor Go em WebAssembly, autentica as mesmas contas do JED Servidor
+            e já carrega o estado real das empresas dos Alunos.
           </p>
           <div className="hero-actions">
             <Link className="primary-button link-button" href="/login">Entrar no JED</Link>
@@ -54,7 +54,7 @@ export default function Home() {
 
       <section className="architecture" aria-labelledby="arquitetura">
         <div>
-          <p className="eyebrow">Arquitetura W4</p>
+          <p className="eyebrow">Arquitetura W5.0</p>
           <h2 id="arquitetura">O token fica fora do JavaScript.</h2>
         </div>
         <div className="architecture-flow" aria-label="Fluxo da aplicação">
@@ -66,7 +66,7 @@ export default function Home() {
         </p>
       </section>
 
-      <footer>JED Simulador · Web W4 · Base v2.0 RC1.8</footer>
+      <footer>JED Simulador · Web W5.0 · Base v2.0 RC1.8</footer>
     </main>
   );
 }

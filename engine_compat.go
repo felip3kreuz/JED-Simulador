@@ -46,3 +46,13 @@ func allocateSales(sales, newWant, recWant int) (int, int) {
 }
 func personaCompleteness(p Persona) float64 { return core.PersonaCompleteness(p) }
 func journeyStep(e *Empresa) int            { return core.JourneyStep(e) }
+
+// W1.3 random-dependent engine compatibility facade. The legacy package keeps
+// owning the process-wide RNG for now, while the Core receives it explicitly.
+func randRange(a, b float64) float64              { return core.RandRange(rng, a, b) }
+func updateCompetition(e *Empresa, delta float64) { core.UpdateCompetition(e, rng, delta) }
+func selectEvent(e *Empresa) *Evento              { return core.SelectEvent(e, rng) }
+func wasteInputs(e *Empresa) (float64, string)    { return core.WasteInputs(e, rng) }
+func placeInputOrder(e *Empresa, inputID string, q float64, f FornecedorSpec, term int) (bool, float64, string) {
+	return core.PlaceInputOrder(e, inputID, q, f, term, rng)
+}

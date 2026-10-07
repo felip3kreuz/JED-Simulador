@@ -149,19 +149,6 @@ var cenariosBase = []Cenario{
 	{Nome: "Concorrência intensa", Alcance: 0.96, Conversao: 0.94, Oscilacao: 0.10, EventoNegativoExtra: 0.05},
 }
 
-var eventosPositivos = []Evento{
-	{"Uma publicação sobre a empresa teve excelente alcance nas redes sociais.", 1.22, 1.00, 3, 0},
-	{"Clientes recomendaram sua empresa para outras pessoas.", 1.08, 1.07, 4, 0},
-	{"A procura pelo seu tipo de produto ou serviço aumentou nesta semana.", 1.12, 1.05, 0, 0},
-	{"Um concorrente próximo encerrou as atividades.", 1.04, 1.08, 0, -0.10},
-}
-var eventosNegativos = []Evento{
-	{"Um concorrente iniciou uma promoção agressiva nesta semana.", 0.98, 0.90, 0, 0.10},
-	{"Uma avaliação negativa ganhou visibilidade.", 0.98, 0.94, -4, 0},
-	{"O movimento do mercado caiu inesperadamente nesta semana.", 0.88, 0.96, 0, 0},
-	{"Um novo concorrente entrou no mercado.", 0.98, 0.92, 0, 0.12},
-}
-
 // ---------- Sistema / arquivos ----------
 
 func appDir() string {
@@ -762,12 +749,6 @@ func findModel(c Catalogo, id string) (Modelo, bool) {
 
 // ---------- Motor ----------
 
-func randRange(a, b float64) float64 { return a + rng.Float64()*(b-a) }
-
-func updateCompetition(e *Empresa, delta float64) {
-	dp := difficultyProfile(e)
-	e.ConcorrenciaIndice = clamp(e.ConcorrenciaIndice+randRange(-.025, .025)*dp.ConcorrenciaDrift+delta, .60, 1.50)
-}
 func fixedWeekly(e *Empresa) float64 {
 	aluguel := e.AluguelMensal / 4.33
 	folha := float64(e.Funcionarios) * e.SalarioMedio / 4.33
@@ -780,104 +761,6 @@ func fixedWeekly(e *Empresa) float64 {
 		reg = e.CustoRegulatorioMensal / 4.33
 	}
 	return aluguel + folha + digital + reg + e.MarketingSemanal + digitalToolCost(e)
-}
-
-func selectEvent(e *Empresa) *Evento {
-	dp := difficultyProfile(e)
-	if rng.Float64() >= dp.ChanceEvento {
-		return nil
-	}
-	neg := clamp(.50+e.CenarioEventoNegExtra+dp.NegExtra, .15, .85)
-	if rng.Float64() < neg {
-		x := eventosNegativos[rng.Intn(len(eventosNegativos))]
-		return &x
-	}
-	x := eventosPositivos[rng.Intn(len(eventosPositivos))]
-	return &x
-}
-
-func wasteInputs(e *Empresa) (float64, string) {
-	if !e.UsaInsumos {
-		return 0, ""
-	}
-	total := 0.0
-	parts := []string{}
-	for i := range e.Insumos {
-		x := &e.Insumos[i]
-		if x.PerdaSemanal <= 0 || x.Quantidade <= 0 {
-			continue
-		}
-		rate := clamp(x.PerdaSemanal*difficultyProfile(e).Desperdicio*randRange(.75, 1.25), 0, .50)
-		q := x.Quantidade * rate
-		if q < 0.01 {
-			continue
-		}
-		v := q * x.CustoMedio
-		x.Quantidade = math.Max(0, x.Quantidade-q)
-		total += v
-		parts = append(parts, fmt.Sprintf("%s %.1f %s (%s)", x.Nome, q, x.Unidade, money(v)))
-	}
-	e.EstoqueValor = stockValueInputs(e)
-	return total, strings.Join(parts, "; ")
-}
-
-func placeInputOrder(e *Empresa, inputID string, q float64, f FornecedorSpec, term int) (bool, float64, string) {
-	if q <= 0 {
-		return false, 0, "quantidade inválida"
-	}
-	i := findInputIndex(e, inputID)
-	if i < 0 {
-		return false, 0, "insumo não encontrado"
-	}
-	maxTerm := minInt(e.PrazoFornecedorMax, f.PrazoPagamentoMax)
-	if term < 0 {
-		term = 0
-	}
-	if term > maxTerm {
-		term = maxTerm
-	}
-	baseCost := e.Insumos[i].CustoReferencia
-	if baseCost <= 0 {
-		baseCost = e.Insumos[i].CustoMedio
-	}
-	if baseCost <= 0 {
-		baseCost = 1
-	}
-	unit := baseCost * f.MultiplicadorPreco
-	cost := q * unit
-	if term == 0 && cost > e.Caixa {
-		return false, cost, "caixa insuficiente"
-	}
-	if term == 0 {
-		e.Caixa -= cost
-	} else {
-		e.ContasPagar = append(e.ContasPagar, Conta{e.Semana + term, round2(cost), fmt.Sprintf("%s — %s", f.Nome, e.Insumos[i].Nome)})
-	}
-	delay := f.PrazoEntregaSemanas
-	delayed := false
-	reliability := clamp(f.Confiabilidade+difficultyProfile(e).FornecedorBonus, .50, .995)
-	if rng.Float64() > reliability {
-		delay++
-		delayed = true
-	}
-	if delay == 0 {
-		oldQ := e.Insumos[i].Quantidade
-		oldV := oldQ * e.Insumos[i].CustoMedio
-		e.Insumos[i].Quantidade += q
-		e.Insumos[i].CustoMedio = (oldV + cost) / e.Insumos[i].Quantidade
-		e.EstoqueValor = stockValueInputs(e)
-		msg := "entrega imediata"
-		if delayed {
-			msg = "entrega imediata (fornecedor sofreu atraso, mas entregou no mesmo ciclo)"
-		}
-		return true, cost, msg
-	}
-	e.PedidosInsumos = append(e.PedidosInsumos, PedidoInsumo{inputID, e.Insumos[i].Nome, q, unit, round2(cost), f.Nome, e.Semana + delay})
-	msg := fmt.Sprintf("entrega prevista para a semana %d", e.Semana+delay)
-	if delayed {
-		msg += " — houve atraso do fornecedor"
-	}
-	return true, cost, msg
 }
 
 func digitalChannelMods(e *Empresa) (reach, conv, rec float64) {

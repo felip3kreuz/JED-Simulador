@@ -1,4 +1,4 @@
-JED SIMULADOR v2.0 RC1.6 — ADMINISTRADOR
+JED SIMULADOR v2.0 RC1.8 — ADMINISTRADOR
 
 NOVIDADES PRINCIPAIS
 - Três papéis separados: Administrador, Mentor e Aluno.
@@ -15,12 +15,14 @@ NOVIDADES PRINCIPAIS
   fornecedores, turmas, cenários e sincronização online.
 
 CONFIGURAÇÃO INICIAL DO SERVIDOR
-1. Abra um terminal na pasta do servidor.
-2. Execute:
-   JED_Servidor.exe --create-admin
+1. Abra JED_Servidor.exe normalmente.
+2. Se for o primeiro uso, escolha:
+   1. Criar Administrador Principal agora
 3. Informe nome, e-mail e senha.
-4. Depois inicie normalmente:
-   JED_Servidor.exe
+4. Ao concluir, o servidor inicia automaticamente.
+
+Alternativa manual:
+JED_Servidor.exe --create-admin
 
 RECUPERAÇÃO ADMINISTRATIVA LOCAL
 JED_Servidor.exe --reset-admin-password
@@ -47,3 +49,13 @@ ATALHOS
 F1       Ajuda rápida
 Ctrl+S   Salvar
 Esc      Voltar
+
+
+E-MAIL DE CREDENCIAIS
+Configuração opcional:
+JED_Servidor.exe --configure-email
+
+Teste:
+JED_Servidor.exe --test-email
+
+Consulte LEIA-ME-EMAIL.txt.

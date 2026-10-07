@@ -16,15 +16,15 @@ Substitua `SEU_USUARIO_GITHUB` pelo usuário ou organização real antes de soli
 
 ### Authors / Committers
 
-- `felip3kreuz` — mantenedor responsável pelo desenvolvimento e manutenção do código.
+- `SEU_USUARIO_GITHUB` — mantenedor responsável pelo desenvolvimento e manutenção do código.
 
 ### Reviewers
 
-- `felip3kreuz` — responsável por revisar contribuições externas antes do merge.
+- `SEU_USUARIO_GITHUB` — responsável por revisar contribuições externas antes do merge.
 
 ### Approvers
 
-- `felip3kreuz` — responsável por aprovar cada solicitação de assinatura de release.
+- `SEU_USUARIO_GITHUB` — responsável por aprovar cada solicitação de assinatura de release.
 
 Se outras pessoas passarem a integrar formalmente a manutenção do projeto, esta seção deve ser atualizada.
 

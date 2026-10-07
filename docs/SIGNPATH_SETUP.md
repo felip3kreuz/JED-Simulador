@@ -43,7 +43,7 @@ O workflow utiliza `go-winres v0.3.3` para adicionar ícone e metadados do Windo
 
 Crie uma tag, por exemplo:
 
-`v2.0.0-rc1.6`
+`v2.0.0-rc1.8`
 
 Use o artefato produzido pelo GitHub Actions para criar uma Release pública.
 
@@ -94,8 +94,8 @@ Cadastre uma Artifact Configuration no projeto SignPath usando esse conteúdo.
 Ela foi preparada para assinar os seis executáveis Windows do JED e verificar que todos possuem:
 
 - Product Name: `JED Simulador`
-- Product Version: `2.0.0.16`
-- File Version: `2.0.0.16`
+- Product Version: `2.0.0.18`
+- File Version: `2.0.0.18`
 
 ## 9. Ative o GitHub App do SignPath
 

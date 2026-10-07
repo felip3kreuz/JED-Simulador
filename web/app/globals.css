@@ -333,3 +333,56 @@ a { color: inherit; }
   .session-card { min-width: 0; }
   .header-login { margin-left: auto; }
 }
+
+/* W5.0 — leitura da empresa do Aluno */
+.student-company-head { display: grid; grid-template-columns: 1fr auto; gap: 36px; align-items: end; padding: 62px 0 30px; }
+.student-company-head h1 { margin-bottom: 12px; font-size: clamp(2.45rem, 5vw, 4.5rem); }
+.student-company-head .lede { max-width: 760px; }
+.student-company-actions { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 260px; }
+.company-picker { display: grid; gap: 7px; color: #364255; font-size: .8rem; font-weight: 750; }
+.company-picker select { min-height: 42px; padding: 8px 34px 8px 11px; border: 1px solid #cbd5e1; border-radius: 9px; color: var(--ink); background: white; font: inherit; }
+.student-user-menu { margin-left: auto; }
+.student-sync-strip { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 14px 16px; border: 1px solid rgba(21,115,71,.16); border-radius: 12px; color: #567063; background: var(--success-bg); font-size: .8rem; }
+.student-sync-strip > div { display: flex; align-items: center; gap: 9px; color: var(--success); }
+.student-sync-strip > span { padding-left: 20px; border-left: 1px solid rgba(21,115,71,.14); }
+.student-progress { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; padding: 28px 0; }
+.student-progress > div:first-child { display: flex; flex-direction: column; min-width: 170px; }
+.student-progress > div:first-child span { margin-top: 4px; color: var(--muted); font-size: .8rem; }
+.student-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: #dfe7f1; }
+.student-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.student-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding-bottom: 28px; }
+.student-metric { min-height: 132px; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
+.student-metric > span { display: block; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.student-metric strong { display: block; margin-top: 12px; font-size: clamp(1.3rem, 2vw, 1.75rem); letter-spacing: -.03em; }
+.student-metric small { display: block; margin-top: 7px; color: var(--muted); }
+.student-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 8px 0 44px; }
+.student-panel { padding: 26px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.student-panel h2 { margin-bottom: 22px; font-size: 1.65rem; }
+.student-data-list { margin: 0; }
+.student-data-list > div { display: flex; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid var(--line); }
+.student-data-list dt { color: var(--muted); }
+.student-data-list dd { margin: 0; font-weight: 700; text-align: right; }
+.student-muted { margin: 0; color: var(--muted); line-height: 1.6; }
+.student-loading, .student-error, .student-empty, .student-core-error { margin: 60px 0; padding: 30px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.student-loading { color: var(--muted); }
+.student-error, .student-core-error { display: grid; gap: 12px; color: var(--danger); background: var(--danger-bg); }
+.student-error .secondary-button { justify-self: start; }
+.student-empty { max-width: 760px; }
+.student-empty h2 { margin-bottom: 14px; }
+.student-empty p:not(.eyebrow) { color: var(--muted); line-height: 1.65; }
+.student-next-step { display: grid; grid-template-columns: .8fr 1.2fr; gap: 42px; margin-bottom: 58px; padding: 36px; border-radius: 20px; color: white; background: var(--navy); }
+.student-next-step .eyebrow { color: #8bb8ed; }
+.student-next-step p:last-child { margin: 0; color: #c3cfdf; line-height: 1.65; }
+
+@media (max-width: 900px) {
+  .student-company-head, .student-next-step { grid-template-columns: 1fr; }
+  .student-company-actions { min-width: 0; }
+  .student-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .student-detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .student-progress { grid-template-columns: 1fr; }
+  .student-metrics-grid { grid-template-columns: 1fr; }
+  .student-sync-strip > span { width: 100%; padding-left: 0; border-left: 0; }
+}

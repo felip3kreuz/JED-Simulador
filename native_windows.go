@@ -499,7 +499,7 @@ func drawChrome(hdc uintptr, cr rect, title, sub string) {
 	fill(hdc, rect{0, 0, cr.Right, 56}, colInk)
 	text(hdc, "JED", rect{28, 0, 100, 56}, 24, rgb(255, 255, 255), DT_LEFT, true)
 	text(hdc, "BUSINESS SIMULATION / ORBITA CLEAN", rect{100, 0, 500, 56}, 11, rgb(210, 220, 228), DT_LEFT, true)
-	text(hdc, "SYS 2.0 RC1.6", rect{cr.Right - 210, 0, cr.Right - 28, 56}, 11, colCyan, DT_RIGHT, true)
+	text(hdc, "SYS 2.0 RC1.8", rect{cr.Right - 210, 0, cr.Right - 28, 56}, 11, colCyan, DT_RIGHT, true)
 	text(hdc, "F1 AJUDA  •  CTRL+S SALVAR", rect{cr.Right - 410, 0, cr.Right - 220, 56}, 9, rgb(160, 178, 190), DT_RIGHT, false)
 	text(hdc, title, rect{32, 66, cr.Right - 32, 104}, 24, colInk, DT_LEFT, true)
 	text(hdc, strings.ToUpper(sub), rect{32, 101, cr.Right - 32, 126}, 10, colMuted, DT_LEFT, true)
@@ -884,9 +884,22 @@ func nativeOnlineMentorInvite() {
 		nativeInfo("Credenciar mentor", err.Error())
 		return
 	}
-	nativeInfo("Credencial criada",
-		fmt.Sprintf("%s\n%s\n%s\n\nCódigo de mentor: %s\nValidade: 30 dias\nUso único.",
-			inv.Name, inv.Email, inv.Institution, inv.Code))
+	msg := fmt.Sprintf("%s\n%s\n%s\n\nCódigo de mentor: %s\nValidade: 30 dias\nUso único.",
+		inv.Name, inv.Email, inv.Institution, inv.Code)
+	switch inv.EmailStatus {
+	case "sent":
+		msg += "\n\n✓ Credencial enviada automaticamente por e-mail."
+	case "not_configured":
+		msg += "\n\nE-mail automático não está configurado.\nCopie o código e envie ao Mentor manualmente."
+	case "failed":
+		msg += "\n\n⚠ A credencial foi criada e continua válida, mas o e-mail não pôde ser enviado."
+		if strings.TrimSpace(inv.EmailError) != "" {
+			msg += "\n\nDetalhe: " + inv.EmailError
+		}
+	default:
+		msg += "\n\nO status do envio de e-mail não foi informado pelo servidor."
+	}
+	nativeInfo("Credencial criada", msg)
 }
 
 func nativeOnlineMentorInvites() {
@@ -911,7 +924,16 @@ func nativeOnlineMentorInvites() {
 				status = "EXPIRADA"
 			}
 		}
-		fmt.Fprintf(&b, "%s • %s • %s • %s\n", inv.Name, inv.Email, inv.Code, status)
+		emailState := ""
+		switch inv.EmailStatus {
+		case "sent":
+			emailState = " • E-MAIL ENVIADO"
+		case "not_configured":
+			emailState = " • E-MAIL MANUAL"
+		case "failed":
+			emailState = " • E-MAIL FALHOU"
+		}
+		fmt.Fprintf(&b, "%s • %s • %s • %s%s\n", inv.Name, inv.Email, inv.Code, status, emailState)
 	}
 	nativeInfo("Credenciais de mentor", b.String())
 }

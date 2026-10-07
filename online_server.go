@@ -105,6 +105,9 @@ type serverMentorInvitation struct {
 	RedeemedAt      string `json:"redeemed_at,omitempty"`
 	RevokedAt       string `json:"revoked_at,omitempty"`
 	UserID          string `json:"user_id,omitempty"`
+	EmailStatus     string `json:"email_status,omitempty"`
+	EmailSentAt     string `json:"email_sent_at,omitempty"`
+	EmailError      string `json:"email_error,omitempty"`
 }
 
 func newServerState(root string) *serverState {
@@ -926,6 +929,8 @@ func (st *serverState) handler() http.Handler {
 				apiErr(w, 400, err.Error())
 				return
 			}
+			// A credencial é persistida antes do envio. Falha de e-mail nunca invalida o código.
+			inv = st.deliverMentorInvitationEmail(inv)
 			writeJSON(w, 201, inv)
 		case "GET":
 			st.mu.RLock()
@@ -1434,6 +1439,7 @@ func createInitialAdminInteractive(st *serverState) error {
 	}
 	fmt.Println("CONFIGURAÇÃO INICIAL DO JED SERVIDOR")
 	fmt.Println("O primeiro administrador será o Administrador Principal.")
+	fmt.Println()
 	name, err := readLocalLine("Nome do administrador: ")
 	if err != nil {
 		return err
@@ -1457,8 +1463,70 @@ func createInitialAdminInteractive(st *serverState) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println()
 	fmt.Printf("Administrador Principal criado: %s <%s> [%s]\n", u.Name, u.Email, u.ID)
 	return nil
+}
+
+func needsFirstRunSetup(st *serverState) bool {
+	return !st.hasAdmin()
+}
+
+func firstRunSetupInteractive(st *serverState) (bool, error) {
+	if !needsFirstRunSetup(st) {
+		return true, nil
+	}
+
+	fmt.Println("============================================================")
+	fmt.Println(" JED SERVIDOR — PRIMEIRA CONFIGURAÇÃO")
+	fmt.Println("============================================================")
+	fmt.Println()
+	fmt.Println("Nenhum Administrador foi configurado neste servidor.")
+	fmt.Println("Antes do primeiro uso, é necessário criar o")
+	fmt.Println("Administrador Principal.")
+	fmt.Println()
+	fmt.Println("1. Criar Administrador Principal agora")
+	fmt.Println("2. Sair sem alterar nada")
+	fmt.Println()
+
+	for {
+		choice, err := readLocalLine("Escolha [1/2]: ")
+		if err != nil {
+			return false, err
+		}
+		switch strings.TrimSpace(choice) {
+		case "1":
+			for {
+				fmt.Println()
+				if err := createInitialAdminInteractive(st); err == nil {
+					fmt.Println()
+					fmt.Println("Configuração inicial concluída.")
+					fmt.Println("O JED Servidor será iniciado agora.")
+					fmt.Println()
+					return true, nil
+				} else {
+					fmt.Println()
+					fmt.Println("Não foi possível criar o Administrador:")
+					fmt.Println(err)
+					fmt.Println()
+					retry, readErr := readLocalLine("Tentar novamente? [S/n]: ")
+					if readErr != nil {
+						return false, readErr
+					}
+					retry = strings.ToLower(strings.TrimSpace(retry))
+					if retry == "n" || retry == "nao" || retry == "não" {
+						fmt.Println("Configuração cancelada. Nenhuma conta administrativa foi criada.")
+						return false, nil
+					}
+				}
+			}
+		case "2":
+			fmt.Println("Configuração cancelada. O servidor não foi iniciado.")
+			return false, nil
+		default:
+			fmt.Println("Opção inválida. Digite 1 para configurar ou 2 para sair.")
+		}
+	}
 }
 
 func resetAdminPasswordInteractive(st *serverState) error {
@@ -1498,6 +1566,19 @@ func runServerCLI(args []string) error {
 		return err
 	}
 
+	if len(args) > 0 && args[0] == "--configure-email" {
+		if len(args) != 1 {
+			return errors.New("uso: JED_Servidor.exe --configure-email")
+		}
+		return configureEmailInteractive()
+	}
+	if len(args) > 0 && args[0] == "--test-email" {
+		if len(args) != 1 {
+			return errors.New("uso: JED_Servidor.exe --test-email")
+		}
+		return testEmailInteractive()
+	}
+
 	if len(args) > 0 && args[0] == "--create-admin" {
 		if len(args) != 1 {
 			return errors.New("uso: JED_Servidor.exe --create-admin")
@@ -1526,8 +1607,23 @@ func runServerCLI(args []string) error {
 		return nil
 	}
 	if !st.hasAdmin() {
-		return errors.New("nenhum administrador configurado; execute localmente: JED_Servidor.exe --create-admin")
+		start, err := firstRunSetupInteractive(st)
+		if err != nil {
+			return err
+		}
+		if !start {
+			return nil
+		}
 	}
+	if cfg, configured, cfgErr := loadServerEmailConfig(); cfgErr != nil {
+		log.Printf("AVISO: configuração de e-mail inválida: %v", cfgErr)
+	} else if configured {
+		log.Printf("E-mail automático: configurado via SMTP %s:%d (%s)", cfg.Host, cfg.Port, cfg.Security)
+	} else {
+		log.Printf("E-mail automático: não configurado. Credenciais de Mentor continuarão disponíveis para envio manual.")
+		log.Printf("Para configurar: JED_Servidor.exe --configure-email")
+	}
+
 	addr := os.Getenv("JED_SERVER_ADDR")
 	if addr == "" {
 		addr = ":8787"

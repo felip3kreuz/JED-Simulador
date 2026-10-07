@@ -99,3 +99,34 @@ O painel ADMINISTRADOR permite:
 - Um Mentor só pode emitir credenciais MTR se um Administrador conceder essa permissão.
 - Uma conta desativada não autentica e suas sessões ativas são invalidadas.
 - O Administrador Principal não pode ser desativado antes de transferir a função principal.
+
+
+## RC1.7 — configuração inicial automática do servidor
+
+A RC1.6 exigia que o responsável soubesse executar `JED_Servidor.exe --create-admin`.
+Ao abrir o servidor pela primeira vez com duplo clique, a janela podia encerrar
+rapidamente, dando a impressão de que o programa não funcionava.
+
+Na RC1.7:
+
+- ao iniciar `JED_Servidor.exe` sem Administrador, o servidor detecta automaticamente o primeiro uso;
+- exibe um assistente textual de configuração;
+- oferece `1. Criar Administrador Principal agora` ou `2. Sair sem alterar nada`;
+- erros de validação não fecham imediatamente o programa: o usuário pode tentar novamente;
+- concluída a criação do Administrador Principal, o servidor inicia automaticamente;
+- `--create-admin` continua disponível como alternativa manual;
+- servidores já configurados não mudam de comportamento.
+
+
+## RC1.8 — e-mail automático de credenciais de Mentor
+
+- Credenciais `MTR` podem ser enviadas automaticamente ao e-mail do Mentor.
+- O envio utiliza SMTP configurado pelo operador do servidor.
+- Não há dependência obrigatória de serviço pago ou provedor específico.
+- Sem SMTP, a credencial continua sendo criada para envio manual.
+- Falha no SMTP nunca invalida nem duplica o código já persistido.
+- Status do envio é exibido ao Administrador/Mentor: enviado, manual ou falhou.
+- Novo comando local: `JED_Servidor.exe --configure-email`.
+- Novo comando de teste: `JED_Servidor.exe --test-email`.
+- Configuração local padrão: `servidor_email.json`.
+- O arquivo de configuração SMTP é um segredo local e deve permanecer fora do GitHub.

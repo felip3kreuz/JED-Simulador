@@ -8,7 +8,7 @@ Tutores podem organizar turmas, utilizar cenários pedagógicos, convidar alunos
 
 ## Estado do projeto
 
-Versão-base deste repositório: **v2.0.0-rc1.6**.
+Versão-base deste repositório: **v2.0.0-rc1.8**.
 
 O projeto é distribuído como software livre sob a licença **GNU General Public License v3.0 (GPLv3)**.
 
@@ -97,3 +97,27 @@ O material necessário para preparar a solicitação está em:
 - [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
 
 > Antes de solicitar a assinatura gratuita, substitua no repositório os marcadores `SEU_USUARIO_GITHUB` pelo usuário ou organização que realmente manterá o projeto.
+
+
+## Primeiro uso do servidor
+
+A partir da v2.0 RC1.8, basta abrir `JED_Servidor.exe`.
+Se não existir um Administrador, o próprio servidor inicia o assistente de
+configuração do Administrador Principal e, ao concluir, inicia o serviço.
+O comando `JED_Servidor.exe --create-admin` continua disponível como alternativa.
+
+
+## E-mail automático de credenciais
+
+O servidor pode enviar credenciais de Mentor por SMTP. O recurso é opcional e não
+depende de um provedor específico. Sem SMTP configurado, o código MTR continua
+disponível para envio manual.
+
+A configuração local pode ser criada com:
+
+```text
+JED_Servidor.exe --configure-email
+```
+
+O arquivo `servidor_email.json`, que pode conter uma senha SMTP, é local e está
+excluído do repositório por `.gitignore`.

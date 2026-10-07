@@ -1,6 +1,6 @@
 JED SIMULADOR — PACOTE GITHUB READY
 
-Base: v2.0.0-rc1.6
+Base: v2.0.0-rc1.8
 Licença escolhida: GNU GPL v3
 
 PASSOS DO USUÁRIO:

@@ -94,6 +94,9 @@ type OnlineMentorInvitation struct {
 	RedeemedAt      string `json:"redeemed_at,omitempty"`
 	RevokedAt       string `json:"revoked_at,omitempty"`
 	UserID          string `json:"user_id,omitempty"`
+	EmailStatus     string `json:"email_status,omitempty"`
+	EmailSentAt     string `json:"email_sent_at,omitempty"`
+	EmailError      string `json:"email_error,omitempty"`
 }
 
 var onlineConfig OnlineConfig

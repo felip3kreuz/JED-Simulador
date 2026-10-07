@@ -34,3 +34,18 @@ O servidor JED armazena senhas derivadas criptograficamente com sal; a senha em 
 ## Alterações
 
 Mudanças futuras que introduzam coleta ou transferência adicional de dados deverão ser documentadas nesta política antes de uma nova release.
+
+
+## E-mail de credenciamento de Mentor
+
+Quando o operador do servidor configura voluntariamente um serviço SMTP, a criação
+de uma credencial de Mentor pode enviar automaticamente ao provedor SMTP escolhido
+pelo operador o nome do destinatário, seu endereço de e-mail e o código de
+credenciamento necessário para ativar a conta.
+
+O JED Simulador não define nem exige um provedor de e-mail específico. Se o SMTP
+não for configurado, nenhuma mensagem desse tipo é enviada e o código pode ser
+entregue manualmente.
+
+Credenciais de acesso ao servidor SMTP permanecem no servidor local e não devem ser
+publicadas no repositório.

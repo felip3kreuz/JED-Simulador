@@ -3,7 +3,14 @@ JED SIMULADOR — GUIA RÁPIDO DO ADMINISTRADOR
 PRIMEIRO ADMINISTRADOR
 O Administrador não possui cadastro público.
 
-Na primeira configuração do servidor, execute localmente:
+Na primeira execução, basta abrir:
+
+JED_Servidor.exe
+
+Se ainda não existir Administrador, o servidor detectará automaticamente o
+primeiro uso e oferecerá a criação do Administrador Principal.
+
+Como alternativa manual, continua disponível:
 
 JED_Servidor.exe --create-admin
 

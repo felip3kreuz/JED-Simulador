@@ -1,0 +1,197 @@
+{
+  "project": "JED Simulador",
+  "base_version": "2.0.0-rc1.6",
+  "license": "GPL-3.0",
+  "files": [
+    {
+      "path": ".github/workflows/build-windows.yml",
+      "size": 2557,
+      "sha256": "2541e7c63b8fd7d94bae7e67aa9ceb0f779f8330164cf51e1d74b93290cc26cf"
+    },
+    {
+      "path": ".github/workflows/signpath-release.yml",
+      "size": 3212,
+      "sha256": "a7be0fe1bab6d7873c2aa1ec799d5cf020c8de47cba7cdd8d41795021434ab21"
+    },
+    {
+      "path": ".gitignore",
+      "size": 271,
+      "sha256": "b6d0d6c6de4af434d656f520c103bf533d2304a0c3287461b04a92ac1c1de053"
+    },
+    {
+      "path": ".signpath/artifact-configurations/jed-windows.xml",
+      "size": 788,
+      "sha256": "306c554c724b4bcf50201bf969258d212aa47a365efc863022a8ca0e45e5e658"
+    },
+    {
+      "path": "00_COMECE_AQUI.txt",
+      "size": 984,
+      "sha256": "8c58c82c95b718bb73b5d7f7ec7571061fae5c660cfd6b07657a092b58e4f136"
+    },
+    {
+      "path": "CODE_SIGNING_POLICY.md",
+      "size": 1609,
+      "sha256": "256ee499b5c4ae6a5b451e8df2545b9db43e01843b7c77650967674db1c64fa5"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "size": 653,
+      "sha256": "c5603c3667abf22aeb57cae3b309fe8673672581376cf38c6cc61c8633a8a3c3"
+    },
+    {
+      "path": "LEIA-ME-ADMINISTRADOR.txt",
+      "size": 1497,
+      "sha256": "04099bd3f361a5be5a3311b13bfd066ced4dae7cc751f64b68ccde7979eb9592"
+    },
+    {
+      "path": "LEIA-ME-CUSTO-ZERO.txt",
+      "size": 833,
+      "sha256": "bac780b3a4d1701954048c620667b44b2bb2d58b0f48d3916515565e2023ffe7"
+    },
+    {
+      "path": "LEIA-ME-ONLINE.txt",
+      "size": 2274,
+      "sha256": "c2c426794fdc1a7da82f63e3c9e33f10909ed784b548d470fae6c6dda44306f8"
+    },
+    {
+      "path": "LEIA-ME.txt",
+      "size": 1628,
+      "sha256": "cb5ed71d720edc86708e8fe63c6bedbc0cadabbc9189177f4b2edf186d3bf518"
+    },
+    {
+      "path": "LICENSE",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "MODELO_IMPORTACAO_ALUNOS.csv",
+      "size": 114,
+      "sha256": "be2c1a0c680ea4d55f90a8d5cb3685b994b30bc72f9c80c2e7c763803f9a5df6"
+    },
+    {
+      "path": "PRIVACY.md",
+      "size": 1374,
+      "sha256": "18daa69b36d3d7d694c31b54e64fea9cb3f791eac125e7fe59cb8464a27172b1"
+    },
+    {
+      "path": "README.md",
+      "size": 3332,
+      "sha256": "510391dd59b7f3dcde75fdc7658529698a2dbc512e46488c25f1798bcd55ea78"
+    },
+    {
+      "path": "README_DESENVOLVIMENTO.md",
+      "size": 4422,
+      "sha256": "acadb57011022cb61cd8b8680c589a4c4a116b3715f040667d433b49de700dbb"
+    },
+    {
+      "path": "SECURITY.md",
+      "size": 820,
+      "sha256": "23db048efed113c729155554b71580be6256753812b166c6cee57d8ace86986a"
+    },
+    {
+      "path": "SERVIDOR_EXEMPLO.env.txt",
+      "size": 203,
+      "sha256": "753a51a290f7e91e78a2e308e59147eb7be3e7278b58ea38c193cc6f70c32c1b"
+    },
+    {
+      "path": "SHA256.txt",
+      "size": 536,
+      "sha256": "8e60d7bffc6781659b965abc75454c73bcfca9198c20f19e9caded9f75b58a9a"
+    },
+    {
+      "path": "build_windows.bat",
+      "size": 576,
+      "sha256": "1e14b4b5125d7ad67541560150d14ca66fd8a9f75506fbbeeb9de63dfba068d9"
+    },
+    {
+      "path": "catalogo_insumos.json",
+      "size": 32128,
+      "sha256": "28556c3a7b32ec7fa331aa51beb04f2dd6bdca8f1a1004b7005e7e6beb60ea40"
+    },
+    {
+      "path": "catalogo_negocios.json",
+      "size": 71657,
+      "sha256": "33f06bec9d521937c67c3798f114026853981564e5ec82e98b13e02222d25f3d"
+    },
+    {
+      "path": "console_other.go",
+      "size": 222,
+      "sha256": "20fbbfc9f718945406fc7c07992a4a5308081e712ec8d2bc0150713e8dd5a49f"
+    },
+    {
+      "path": "console_secret_other.go",
+      "size": 198,
+      "sha256": "601a5eef7e956b40e0c5be2d2e2ceb5bc8c45278b54c64a93d522ea47dc37d8f"
+    },
+    {
+      "path": "console_secret_windows.go",
+      "size": 989,
+      "sha256": "6a81932a95469054fa922287aa1d7db1027c1b62cbc9b1fc37a0ba1941eee2e6"
+    },
+    {
+      "path": "console_windows.go",
+      "size": 1198,
+      "sha256": "d62ebf05ff475c14e40d00eb38453ddb393ebdfa5b7b8e603d347165f5abf778"
+    },
+    {
+      "path": "docs/RELEASE_CHECKLIST.md",
+      "size": 1003,
+      "sha256": "3724c6ff94b3cd3f74f346882a4fa7aedaee0cd1b2ef30b9d8d6596a39b2394c"
+    },
+    {
+      "path": "docs/SIGNPATH_APPLICATION_TEMPLATE.md",
+      "size": 1867,
+      "sha256": "14fd244aa7ebea99a5a47a16589a8e32e69fa6bbfb1a73f00242817e05fa5103"
+    },
+    {
+      "path": "docs/SIGNPATH_SETUP.md",
+      "size": 2991,
+      "sha256": "69c784d8dd1379f5a63c547316b443fbb8756f9084bc30942c510d17d568a25d"
+    },
+    {
+      "path": "go.mod",
+      "size": 30,
+      "sha256": "ab6d590053b65cc3dbb3c50f6f3ff3f406c9f397abd6316ff971db0d8b17296e"
+    },
+    {
+      "path": "jed_icon.ico",
+      "size": 169839,
+      "sha256": "953c36b81e222bc1d7fef7f41c730b6d092758101117119ab4d59cebae33b559"
+    },
+    {
+      "path": "main.go",
+      "size": 142427,
+      "sha256": "efad97b3da79b06395fdd3e326b7321247b52260d1e8369079fb70bdaa7b1224"
+    },
+    {
+      "path": "native_stub.go",
+      "size": 144,
+      "sha256": "a3983c4d3f28abfc558c352102a44ec653e43a65703d8fbdb436906c1f1edfa9"
+    },
+    {
+      "path": "native_windows.go",
+      "size": 90154,
+      "sha256": "a5d11a13c25de9a2a664316024d8bb0fcc5cd174807b0b09987f1020ab539088"
+    },
+    {
+      "path": "online_admin_test.go",
+      "size": 4408,
+      "sha256": "3973b2e7ee2a97f7f0c5e79d06f4d698147e68d59f117bba46fba0e6334f123d"
+    },
+    {
+      "path": "online_client.go",
+      "size": 13551,
+      "sha256": "562a1863630ce604d65777b579e353cf7ee66a4963a88c807b12c7683a17a69a"
+    },
+    {
+      "path": "online_registration_test.go",
+      "size": 3806,
+      "sha256": "bd078404cc7a4726f4d45c29244210371a8adcc96160f109c447066b342a01fa"
+    },
+    {
+      "path": "online_server.go",
+      "size": 45250,
+      "sha256": "9eb167e5fad002cf69838c3d781b3b4a7efc32526e14e7d3f6d64d916fe4d8a8"
+    }
+  ]
+}

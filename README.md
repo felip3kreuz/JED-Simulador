@@ -1,0 +1,99 @@
+# JED Simulador
+
+Simulador educacional de empreendedorismo para apoiar atividades do programa **Jovens Empreendedores Digitais (JED)**.
+
+O software permite que estudantes criem e administrem empreendimentos simulados, trabalhem **Persona** e **Lean Canvas**, escolham canais e ferramentas digitais e acompanhem indicadores comerciais, operacionais e financeiros.
+
+Tutores podem organizar turmas, utilizar cenários pedagógicos, convidar alunos e acompanhar resultados sincronizados quando o modo online é utilizado.
+
+## Estado do projeto
+
+Versão-base deste repositório: **v2.0.0-rc1.6**.
+
+O projeto é distribuído como software livre sob a licença **GNU General Public License v3.0 (GPLv3)**.
+
+## Arquitetura de contas
+
+O modo online utiliza três papéis:
+
+- **Administrador** — administra contas, permissões e segurança da plataforma;
+- **Mentor** — administra suas turmas e acompanha resultados;
+- **Aluno** — administra suas próprias simulações.
+
+Não existe cadastro público de Administrador. O primeiro Administrador é definido
+localmente no servidor com `JED_Servidor.exe --create-admin`.
+
+Um Mentor novo não pode credenciar outros Mentores por padrão. Essa permissão pode
+ser delegada individualmente por um Administrador.
+
+## Principais recursos
+
+- simulação semanal de um empreendimento;
+- Persona;
+- Lean Canvas;
+- canais digitais;
+- ferramentas digitais;
+- marketing, preço e promoções;
+- estoque, insumos e fornecedores;
+- caixa, custos, contas a receber e contas a pagar;
+- indicadores de desempenho;
+- modo Tutor;
+- turmas e convites no modo online;
+- autocadastro de alunos;
+- autocadastro de mentores mediante credencial `MTR` de uso único;
+- sincronização com servidor JED;
+- execução portátil no Windows;
+- suporte a Windows x64 e x86.
+
+## Compilação
+
+O projeto usa **Go 1.23**.
+
+Teste local:
+
+```bash
+go test ./...
+go run . --self-test
+```
+
+Build básico para Windows x64:
+
+```bash
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-H windowsgui -s -w" -o JED_Simulador.exe .
+```
+
+O workflow do GitHub Actions em `.github/workflows/build-windows.yml` compila automaticamente os executáveis Windows.
+
+## Distribuição
+
+As versões oficiais devem ser publicadas na seção **Releases** do repositório.
+
+Antes da aprovação do SignPath Foundation, as releases serão não assinadas. Depois da aprovação, o workflow preparado em `.github/workflows/signpath-release.yml` poderá solicitar a assinatura dos binários.
+
+## Code signing policy
+
+Leia a política completa em [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+
+**Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
+
+## Privacidade
+
+Leia [PRIVACY.md](PRIVACY.md).
+
+## Segurança
+
+Para comunicar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
+
+## Como contribuir
+
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## SignPath Foundation
+
+O material necessário para preparar a solicitação está em:
+
+- [docs/SIGNPATH_SETUP.md](docs/SIGNPATH_SETUP.md)
+- [docs/SIGNPATH_APPLICATION_TEMPLATE.md](docs/SIGNPATH_APPLICATION_TEMPLATE.md)
+- [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
+
+> Antes de solicitar a assinatura gratuita, substitua no repositório os marcadores `SEU_USUARIO_GITHUB` pelo usuário ou organização que realmente manterá o projeto.

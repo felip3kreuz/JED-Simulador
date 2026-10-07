@@ -1,0 +1,49 @@
+JED SIMULADOR v2.0 RC1.6 — ADMINISTRADOR
+
+NOVIDADES PRINCIPAIS
+- Três papéis separados: Administrador, Mentor e Aluno.
+- Aluno pode se autocadastrar.
+- Mentor se cadastra com credencial MTR.
+- O primeiro Administrador é criado localmente na máquina do servidor.
+- O servidor não inicia sem Administrador.
+- Administrador pode criar outros Administradores.
+- Administrador pode ativar/desativar contas.
+- Administrador controla quais Mentores podem credenciar novos Mentores.
+- Administrador Principal pode transferir a função principal para outro Administrador.
+- Recuperação local de senha administrativa.
+- Mantidos Persona, Lean Canvas, canais, ferramentas digitais, finanças, estoque,
+  fornecedores, turmas, cenários e sincronização online.
+
+CONFIGURAÇÃO INICIAL DO SERVIDOR
+1. Abra um terminal na pasta do servidor.
+2. Execute:
+   JED_Servidor.exe --create-admin
+3. Informe nome, e-mail e senha.
+4. Depois inicie normalmente:
+   JED_Servidor.exe
+
+RECUPERAÇÃO ADMINISTRATIVA LOCAL
+JED_Servidor.exe --reset-admin-password
+
+PAPÉIS
+ADMINISTRADOR
+- administra contas, permissões e segurança da plataforma.
+
+MENTOR
+- cria e acompanha suas turmas;
+- convida alunos;
+- só credencia outros Mentores se receber essa permissão de um Administrador.
+
+ALUNO
+- cria a própria conta;
+- entra em turmas;
+- administra e sincroniza suas próprias simulações.
+
+IMPORTANTE
+Os coeficientes, custos e efeitos dos modelos e ferramentas são parâmetros pedagógicos
+do simulador. Eles não representam estatísticas ou valores oficiais dos materiais JED.
+
+ATALHOS
+F1       Ajuda rápida
+Ctrl+S   Salvar
+Esc      Voltar

@@ -3,9 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# A Vercel pode não disponibilizar o compilador Go no build do Next.js.
-# Se Go já existir (local/GitHub Actions), usamos a instalação existente.
-# Caso contrário, instalamos uma cópia isolada do Go 1.23.12 em /tmp.
+# Vercel's Next.js build image may not expose the Go compiler. Reuse Go when
+# available (local/CI); otherwise install the exact Go release used by RC1.8.
 if ! command -v go >/dev/null 2>&1; then
     GO_VERSION="1.23.12"
 
@@ -28,11 +27,7 @@ if ! command -v go >/dev/null 2>&1; then
     GO_INSTALL_DIR="/tmp/jed-go"
 
     echo "Go não encontrado. Instalando Go ${GO_VERSION} para o build..."
-
-    curl -fsSL \
-        "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" \
-        -o "$GO_ARCHIVE"
-
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" -o "$GO_ARCHIVE"
     echo "${GO_SHA256}  ${GO_ARCHIVE}" | sha256sum -c -
 
     rm -rf "$GO_INSTALL_DIR"

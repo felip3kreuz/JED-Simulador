@@ -38,7 +38,7 @@ jobs:
 
       - name: Generate Windows resources
         run: |
-          go-winres simply             --arch amd64,386             --out rsrc             --icon jed_icon.ico             --manifest gui             --product-version 2.0.0.16             --file-version 2.0.0.16             --product-name "JED Simulador"             --file-description "Simulador educacional de empreendedorismo"             --copyright "JED Simulador contributors"
+          go-winres simply             --arch amd64,386             --out rsrc             --icon jed_icon.ico             --manifest gui             --product-version 2.0.0.18             --file-version 2.0.0.18             --product-name "JED Simulador"             --file-description "Simulador educacional de empreendedorismo"             --copyright "JED Simulador contributors"
 
       - name: Build Windows binaries
         shell: bash
@@ -63,6 +63,8 @@ jobs:
           cp LEIA-ME-CUSTO-ZERO.txt dist/
           cp MODELO_IMPORTACAO_ALUNOS.csv dist/
           cp SERVIDOR_EXEMPLO.env.txt dist/
+          cp SERVIDOR_EMAIL_EXEMPLO.json dist/
+          cp LEIA-ME-EMAIL.txt dist/
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7

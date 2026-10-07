@@ -74,3 +74,16 @@ func hasDigitalChannel(e *Empresa, id string) bool             { return core.Has
 func channelName(id string) string                             { return core.ChannelName(id) }
 func fixedWeekly(e *Empresa) float64                           { return core.FixedWeekly(e) }
 func processWeek(e *Empresa) Registro                          { return core.ProcessWeek(e, rng) }
+
+// W1.5 web-facing Core facade compatibility. Catalog traversal and aggregate
+// analytics no longer depend on package main; the legacy UI keeps the old
+// lowercase names while WebAssembly can call the exported Core API directly.
+func supplyProfileFor(m Modelo, c CatalogoInsumos) PerfilInsumos { return core.SupplyProfileFor(m, c) }
+func findSupplier(c CatalogoInsumos, id string) (FornecedorSpec, bool) {
+	return core.FindSupplier(c, id)
+}
+func catalogCount(c Catalogo) int                    { return core.CatalogCount(c) }
+func findModel(c Catalogo, id string) (Modelo, bool) { return core.FindModel(c, id) }
+func indicators(e *Empresa) *Indicadores             { return core.Indicators(e) }
+func score(e *Empresa) Score                         { return core.CalculateScore(e) }
+func reviewHypotheses(e *Empresa) *Review            { return core.ReviewHypotheses(e) }

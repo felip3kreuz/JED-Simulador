@@ -10,7 +10,7 @@ JED Simulador
 
 ## Repository
 
-https://github.com/felip3kreuz/JED-Simulador
+https://github.com/SEU_USUARIO_GITHUB/JED-Simulador
 
 ## Project description
 
@@ -40,15 +40,15 @@ This program will not transfer any information to other networked systems unless
 
 Privacy policy:
 
-https://github.com/felip3kreuz/JED-Simulador/blob/main/PRIVACY.md
+https://github.com/SEU_USUARIO_GITHUB/JED-Simulador/blob/main/PRIVACY.md
 
 ## Code signing policy
 
-https://github.com/felip3kreuz/JED-Simulador/blob/main/CODE_SIGNING_POLICY.md
+https://github.com/SEU_USUARIO_GITHUB/JED-Simulador/blob/main/CODE_SIGNING_POLICY.md
 
 ## Maintainer
 
-Felipe Cruz (@felip3kreuz)
+[SEU NOME OU IDENTIFICAÇÃO PÚBLICA NO PROJETO]
 
 GitHub:
 https://github.com/SEU_USUARIO_GITHUB

@@ -1472,6 +1472,25 @@ func needsFirstRunSetup(st *serverState) bool {
 	return !st.hasAdmin()
 }
 
+func bootstrapInitialAdminFromEnv(st *serverState) (bool, error) {
+	name := strings.TrimSpace(os.Getenv("JED_BOOTSTRAP_ADMIN_NAME"))
+	email := strings.TrimSpace(os.Getenv("JED_BOOTSTRAP_ADMIN_EMAIL"))
+	password := os.Getenv("JED_BOOTSTRAP_ADMIN_PASSWORD")
+
+	if name == "" && email == "" && password == "" {
+		return false, nil
+	}
+	if name == "" || email == "" || password == "" {
+		return false, errors.New("JED_BOOTSTRAP_ADMIN_NAME, JED_BOOTSTRAP_ADMIN_EMAIL e JED_BOOTSTRAP_ADMIN_PASSWORD devem ser informados juntos")
+	}
+	u, err := st.createInitialAdmin(name, email, password)
+	if err != nil {
+		return false, fmt.Errorf("falha ao criar administrador inicial via ambiente: %w", err)
+	}
+	log.Printf("Administrador Principal inicial criado via ambiente: %s <%s> [%s]", u.Name, u.Email, u.ID)
+	return true, nil
+}
+
 func firstRunSetupInteractive(st *serverState) (bool, error) {
 	if !needsFirstRunSetup(st) {
 		return true, nil
@@ -1607,12 +1626,18 @@ func runServerCLI(args []string) error {
 		return nil
 	}
 	if !st.hasAdmin() {
-		start, err := firstRunSetupInteractive(st)
+		bootstrapped, err := bootstrapInitialAdminFromEnv(st)
 		if err != nil {
 			return err
 		}
-		if !start {
-			return nil
+		if !bootstrapped {
+			start, err := firstRunSetupInteractive(st)
+			if err != nil {
+				return err
+			}
+			if !start {
+				return nil
+			}
 		}
 	}
 	if cfg, configured, cfgErr := loadServerEmailConfig(); cfgErr != nil {
@@ -1624,9 +1649,13 @@ func runServerCLI(args []string) error {
 		log.Printf("Para configurar: JED_Servidor.exe --configure-email")
 	}
 
-	addr := os.Getenv("JED_SERVER_ADDR")
+	addr := strings.TrimSpace(os.Getenv("JED_SERVER_ADDR"))
 	if addr == "" {
-		addr = ":8787"
+		if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+			addr = ":" + port
+		} else {
+			addr = ":8787"
+		}
 	}
 	srv := &http.Server{
 		Addr:              addr,

@@ -56,3 +56,21 @@ func wasteInputs(e *Empresa) (float64, string)    { return core.WasteInputs(e, r
 func placeInputOrder(e *Empresa, inputID string, q float64, f FornecedorSpec, term int) (bool, float64, string) {
 	return core.PlaceInputOrder(e, inputID, q, f, term, rng)
 }
+
+// W1.4 weekly-engine compatibility facade. Digital simulation parameters and
+// the full weekly transition now live in Core; package main keeps the legacy
+// names expected by Win32 and Classic UI while migration continues.
+var canaisDigitais = core.DigitalChannelSpecs()
+var ferramentasDigitais = core.DigitalToolSpecs()
+
+func digitalToolSpec(id string) (FerramentaDigitalSpec, bool) { return core.DigitalToolSpec(id) }
+func hasDigitalTool(e *Empresa, id string) bool               { return core.HasDigitalTool(e, id) }
+func digitalToolCost(e *Empresa) float64                      { return core.DigitalToolCost(e) }
+func digitalToolMods(e *Empresa) (reach, engagement, conv, rec float64) {
+	return core.DigitalToolMods(e)
+}
+func digitalChannelMods(e *Empresa) (reach, conv, rec float64) { return core.DigitalChannelMods(e) }
+func hasDigitalChannel(e *Empresa, id string) bool             { return core.HasDigitalChannel(e, id) }
+func channelName(id string) string                             { return core.ChannelName(id) }
+func fixedWeekly(e *Empresa) float64                           { return core.FixedWeekly(e) }
+func processWeek(e *Empresa) Registro                          { return core.ProcessWeek(e, rng) }

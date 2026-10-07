@@ -1,8 +1,8 @@
 // Package core contains the platform-independent domain model of JED Simulador.
 //
-// W1.1 deliberately moves data types only. Simulation rules remain in package
-// main until the following extraction step so this refactor can be verified
-// independently from behavioural changes.
+// Domain types were extracted in W1.1. W1.2 begins moving deterministic
+// simulation rules into this package while package main keeps compatibility
+// wrappers for the existing Win32, Classic UI and server code.
 package core
 
 type LeanCanvas struct {

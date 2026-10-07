@@ -9,7 +9,7 @@ import (
 	core "jed-simulador/internal/core"
 )
 
-const Version = "2.0-rc1.8-w2"
+const Version = "2.0-rc1.8-web-final"
 
 type envelope struct {
 	OK    bool   `json:"ok"`

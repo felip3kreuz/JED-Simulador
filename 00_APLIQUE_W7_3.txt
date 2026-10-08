@@ -1,38 +1,18 @@
 JED Simulador v2.0 RC1.8 — W7.3
-EXCLUSÃO ADMINISTRATIVA + FILTROS DO MENTOR
+GESTÃO CENTRALIZADA DE TURMAS E MATRÍCULAS
 
-1. Aplique este pacote sobre a W7.2/W7.1.1 já existente no repositório.
-2. Faça commit em uma branch e abra PR para main.
-3. Após o merge, aguarde o deploy da Vercel.
-4. Atualize também o servidor Oracle, pois a W7.3 altera o JED Servidor Go.
+PRINCIPAIS ALTERAÇÕES
+- Administrador cria e nomeia turmas.
+- Administrador designa o Mentor responsável.
+- Aluno pode ser matriculado já no cadastro.
+- Matrícula automática T{turma}A{sequência}; ex.: T25A4.
+- Transferências preservam histórico e geram nova matrícula.
+- Números de matrícula nunca são reutilizados.
+- CSV recebe coluna opcional "turma".
+- Fluxo de ingresso por código foi desativado.
+- Mentor continua escolhendo/alterando o cenário pedagógico da turma.
+- E-mail de cadastro do Aluno passa a informar turma e matrícula quando já atribuídas.
 
-Principais mudanças:
-- somente o Administrador Principal pode excluir contas e turmas;
-- a conta do Administrador Principal é protegida;
-- Mentor com turmas precisa ter suas turmas excluídas antes da conta;
-- excluir Aluno remove seus empreendimentos persistidos e vínculos;
-- excluir turma preserva os empreendimentos, mas os desvincula da turma;
-- exclusões exigem digitar EXCLUIR para confirmação;
-- Mentor filtra Resultados por turma e por APROVADO/PENDENTE/REPROVADO;
-- Mentor filtra Turmas pela presença desses estados e vê contadores por turma.
-
-Atualização Oracle após o merge:
-
-cd ~/JED-Simulador
-git pull --ff-only origin main
-sudo tar -czf /opt/jed/jed-data-backup-$(date +%Y%m%d-%H%M%S).tar.gz -C /opt/jed data
-sudo docker build -t jed-server .
-sudo docker rm -f jed-server
-sudo docker run -d \
-  --name jed-server \
-  --restart unless-stopped \
-  --dns 1.1.1.1 \
-  --dns 8.8.8.8 \
-  -p 127.0.0.1:8787:8787 \
-  -v /opt/jed/data:/data \
-  -e JED_SERVER_DATA=/data \
-  -e JED_PUBLIC_URL=https://jed-simulador-onpq.vercel.app \
-  jed-server
-
-Validação:
-curl http://127.0.0.1:8787/health
+ATUALIZAÇÃO DO SERVIDOR ORACLE
+Esta versão altera o servidor Go. Depois do merge, faça backup de /opt/jed/data,
+recompile a imagem Docker e recrie o container preservando o volume /opt/jed/data:/data.

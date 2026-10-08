@@ -31,16 +31,6 @@ export async function GET() {
   }
 }
 
-export async function POST(request) {
-  try {
-    await actor();
-    const input = await request.json();
-    const code = String(input?.code || "").trim().toUpperCase();
-    if (!code) return NextResponse.json({ error: "Informe o código da turma." }, { status: 400 });
-    const token = await sessionToken();
-    const joined = await jedServerRequest("/api/v1/classes/join", { method: "POST", token, body: { code } });
-    return NextResponse.json({ class: joined }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) {
-    return errorResponse(error, "Falha ao entrar na turma.");
-  }
+export async function POST() {
+  return NextResponse.json({ error: "O vínculo com turmas é realizado exclusivamente pelo Administrador." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
 }

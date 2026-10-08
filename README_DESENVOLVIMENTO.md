@@ -172,15 +172,16 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - A avaliação fica persistida no servidor e não é apagada por sincronizações posteriores do Aluno.
 - O Administrador deixa de exibir na barra lateral os atalhos redundantes `VISÃO GERAL`, `USUÁRIOS` e `IMPORTAR CSV`.
 
+## W7.3 — Gestão centralizada de turmas e matrículas
 
-## W7.3 — exclusão pelo Administrador Principal e filtros do Mentor
-
-- o Administrador Principal pode excluir definitivamente contas de Aluno, Mentor e Administrador secundário;
-- a própria conta do Administrador Principal é protegida contra exclusão;
-- Mentores que ainda possuem turmas precisam ter suas turmas excluídas antes da remoção da conta;
-- a exclusão de Aluno remove seus vínculos de turma, sessões e empreendimentos persistidos;
-- o Administrador Principal pode excluir turmas; os Alunos permanecem cadastrados e seus empreendimentos são preservados, porém desvinculados da turma;
-- todas as exclusões exigem confirmação explícita digitando `EXCLUIR`;
-- o Mentor pode filtrar RESULTADOS simultaneamente por turma e por avaliação (`APROVADO`, `PENDENTE`, `REPROVADO`);
-- a tela TURMAS pode ser filtrada pela presença de empreendimentos em cada situação de avaliação;
-- os cartões de turma exibem contadores de aprovados, pendentes e reprovados.
+- Administrador cria e nomeia turmas e escolhe o Mentor responsável.
+- Numeração sequencial permanente de turmas (`T1`, `T2`, ...).
+- Cadastro de Aluno pode definir a turma imediatamente.
+- Matrícula automática por turma no padrão `T{turma}A{sequência}`.
+- Sequências de matrícula não são reutilizadas.
+- Transferências preservam o histórico de matrículas.
+- Aluno sem turma fica em `AGUARDANDO TURMA`.
+- CSV aceita a coluna `turma` por número, identificador `Tn` ou nome exato.
+- Ingresso do Aluno por código foi desativado.
+- Mentor deixa de criar turmas, mas pode alterar o cenário de suas turmas.
+- Novos empreendimentos herdam o vínculo administrativo atual; empreendimentos já vinculados preservam a turma histórica em transferências.

@@ -7,8 +7,8 @@ const navigation = {
   mentor: [
     ["visao-geral", "VISÃO GERAL", "turmas e resultados"],
     ["cenarios", "CENÁRIOS", "ambientes pedagógicos"],
-    ["turmas", "TURMAS", "códigos e configuração"],
-    ["alunos", "ALUNOS", "vínculos das turmas"],
+    ["turmas", "TURMAS", "atribuição administrativa"],
+    ["alunos", "ALUNOS", "matrículas das turmas"],
     ["resultados", "RESULTADOS", "empresas sincronizadas"],
   ],
   aluno: [
@@ -21,7 +21,7 @@ const navigation = {
     ["financeiro", "FINANCEIRO", "caixa e compromissos"],
     ["indicadores", "INDICADORES", "score e histórico"],
     ["jornada", "JORNADA JED", "percurso pedagógico"],
-    ["turmas", "TURMAS", "vínculos online"],
+    ["turmas", "TURMA", "vínculo administrativo"],
   ],
 };
 

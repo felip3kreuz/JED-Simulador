@@ -33,31 +33,47 @@ type OnlineLoginResponse struct {
 	User  OnlineUser `json:"user"`
 }
 
+type OnlineEnrollment struct {
+	ClassID       string `json:"class_id"`
+	ClassNumber   int    `json:"class_number"`
+	ClassName     string `json:"class_name"`
+	StudentNumber int    `json:"student_number"`
+	EnrollmentID  string `json:"enrollment_id"`
+	StartedAt     string `json:"started_at"`
+	EndedAt       string `json:"ended_at,omitempty"`
+}
+
 type OnlineUser struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	Email              string `json:"email"`
-	Role               string `json:"role"` // aluno | tutor (legado) | mentor | admin
-	Status             string `json:"status,omitempty"`
-	Institution        string `json:"institution,omitempty"`
-	InstitutionalID    string `json:"institutional_id,omitempty"`
-	IsPrimaryAdmin     bool   `json:"is_primary_admin,omitempty"`
-	CanInviteMentors   bool   `json:"can_invite_mentors,omitempty"`
-	MustChangePassword bool   `json:"must_change_password,omitempty"`
-	EmailStatus        string `json:"email_status,omitempty"`
-	EmailSentAt        string `json:"email_sent_at,omitempty"`
-	EmailError         string `json:"email_error,omitempty"`
-	CreatedAt          string `json:"created_at,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Email              string             `json:"email"`
+	Role               string             `json:"role"` // aluno | tutor (legado) | mentor | admin
+	Status             string             `json:"status,omitempty"`
+	Institution        string             `json:"institution,omitempty"`
+	InstitutionalID    string             `json:"institutional_id,omitempty"`
+	IsPrimaryAdmin     bool               `json:"is_primary_admin,omitempty"`
+	CanInviteMentors   bool               `json:"can_invite_mentors,omitempty"`
+	MustChangePassword bool               `json:"must_change_password,omitempty"`
+	EmailStatus        string             `json:"email_status,omitempty"`
+	EmailSentAt        string             `json:"email_sent_at,omitempty"`
+	EmailError         string             `json:"email_error,omitempty"`
+	CreatedAt          string             `json:"created_at,omitempty"`
+	CurrentClassID     string             `json:"current_class_id,omitempty"`
+	EnrollmentID       string             `json:"enrollment_id,omitempty"`
+	EnrollmentStatus   string             `json:"enrollment_status,omitempty"` // active | waiting
+	Enrollments        []OnlineEnrollment `json:"enrollments,omitempty"`
 }
 
 type OnlineClass struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	TutorID    string   `json:"tutor_id"`
-	JoinCode   string   `json:"join_code"`
-	StudentIDs []string `json:"student_ids"`
-	Scenario   Cenario  `json:"scenario"`
-	CreatedAt  string   `json:"created_at"`
+	ID                string   `json:"id"`
+	Number            int      `json:"number,omitempty"`
+	Name              string   `json:"name"`
+	TutorID           string   `json:"tutor_id"`
+	JoinCode          string   `json:"join_code,omitempty"` // legado; novos vínculos são administrativos
+	StudentIDs        []string `json:"student_ids"`
+	NextStudentNumber int      `json:"next_student_number,omitempty"`
+	Scenario          Cenario  `json:"scenario"`
+	CreatedAt         string   `json:"created_at"`
 }
 
 type OnlineScenario struct {

@@ -55,6 +55,14 @@ type OnlineClass struct {
 	CreatedAt  string   `json:"created_at"`
 }
 
+type OnlineScenario struct {
+	ID        string  `json:"id"`
+	TutorID   string  `json:"tutor_id,omitempty"`
+	Builtin   bool    `json:"builtin,omitempty"`
+	Scenario  Cenario `json:"scenario"`
+	CreatedAt string  `json:"created_at,omitempty"`
+}
+
 type RemoteCompany struct {
 	ID        string  `json:"id"`
 	OwnerID   string  `json:"owner_id"`

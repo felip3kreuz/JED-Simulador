@@ -48,4 +48,8 @@ cp "$ROOT/dist/wasm/jed-core.wasm" "$ROOT/web/public/wasm/jed-core.wasm"
 cp "$ROOT/dist/wasm/wasm_exec.js" "$ROOT/web/public/wasm/wasm_exec.js"
 cp "$ROOT/dist/wasm/jed-core.js" "$ROOT/web/public/wasm/jed-core.js"
 
+mkdir -p "$ROOT/web/public/data"
+cp "$ROOT/catalogo_negocios.json" "$ROOT/web/public/data/catalogo_negocios.json"
+cp "$ROOT/catalogo_insumos.json" "$ROOT/web/public/data/catalogo_insumos.json"
+
 npm --prefix "$ROOT/web" run build

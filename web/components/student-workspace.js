@@ -2,207 +2,353 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createJEDClient } from "@/lib/jed-core";
+import { baseScenarios, createInitialCompany, enrichedModel, loadCatalogs, sectorOptions, specialtyOptions, typeOptions } from "@/lib/company-factory";
+import Modal from "@/components/modal";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 const integer = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 function clone(value) { return JSON.parse(JSON.stringify(value ?? {})); }
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+function csv(value) { return Array.isArray(value) ? value.join(", ") : ""; }
+function list(value) { return String(value || "").split(",").map((item) => item.trim()).filter(Boolean); }
+function fmtDate(value) { if (!value) return "—"; const d = new Date(value); return Number.isNaN(d.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(d); }
+
+function Metric({ label, value, detail }) {
+  return <article className="metric-card"><span>{label}</span><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</article>;
 }
-function localKey(remoteID) { return `jed:web:draft:${remoteID}`; }
+
+function DataRow({ label, value }) { return <div><dt>{label}</dt><dd>{value ?? "—"}</dd></div>; }
 
 function CompanyPicker({ companies, selectedID, onChange }) {
-  if (companies.length <= 1) return null;
-  return <label className="company-picker"><span>Empresa</span><select value={selectedID} onChange={(e) => onChange(e.target.value)}>{companies.map((remote) => <option key={remote.id} value={remote.id}>{remote.company?.nome || remote.company?.local_id || "Empresa sem nome"}</option>)}</select></label>;
+  return <label className="company-picker"><span>EMPRESA ATIVA</span><select value={selectedID || ""} onChange={(e) => onChange(e.target.value)}>{companies.map((remote) => <option value={remote.id} key={remote.id}>{remote.company?.nome || remote.id}</option>)}</select></label>;
 }
-function Metric({ label, value, detail }) { return <article className="student-metric"><span>{label}</span><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</article>; }
-function CheckList({ title, items, selected, onToggle, disabled }) {
-  return <fieldset className="choice-field"><legend>{title}</legend><div className="choice-grid">{items.map((item) => { const id = item.ID || item.id; const name = item.Nome || item.nome || id; return <label className={selected.includes(id) ? "choice-card selected" : "choice-card"} key={id}><input type="checkbox" checked={selected.includes(id)} onChange={() => onToggle(id)} disabled={disabled} /><span><strong>{name}</strong><small>{item.Descricao || item.descricao || ""}</small></span></label>; })}</div></fieldset>;
+
+function Checklist({ title, items, selected, onToggle, disabled }) {
+  return <div className="checklist-block"><div className="workspace-section-head compact"><div><p className="eyebrow">{title}</p></div><span className="section-count">{selected?.length || 0} ATIVOS</span></div><div className="checklist-grid">{items.map((item) => <label className={selected?.includes(item.ID ?? item.id) ? "choice-card selected" : "choice-card"} key={item.ID ?? item.id}><input type="checkbox" checked={selected?.includes(item.ID ?? item.id) || false} onChange={() => onToggle(item.ID ?? item.id)} disabled={disabled} /><strong>{item.Nome ?? item.nome}</strong><span>{item.Descricao ?? item.descricao ?? ""}</span>{item.CustoSemanal ? <small>{money.format(item.CustoSemanal)}/semana</small> : null}</label>)}</div></div>;
+}
+
+function RequireCompany({ onCreate }) {
+  return <section className="workspace-card empty-module"><p className="eyebrow">EMPRESA NECESSÁRIA</p><h2>Crie seu empreendimento para liberar este módulo.</h2><p className="student-muted">A versão Web agora cria a empresa diretamente pelo catálogo JED. Não é necessário voltar ao programa Windows.</p><button type="button" className="primary-button" onClick={onCreate}>NOVO EMPREENDIMENTO</button></section>;
 }
 
 export default function StudentWorkspace({ user }) {
+  const coreRef = useRef(null);
+  const [activeView, setActiveView] = useState("empresa");
   const [companies, setCompanies] = useState([]);
   const [classes, setClasses] = useState([]);
   const [selectedID, setSelectedID] = useState("");
   const [draft, setDraft] = useState(null);
-  const [baseRevision, setBaseRevision] = useState(0);
-  const [dirty, setDirty] = useState(false);
-  const [processed, setProcessed] = useState(false);
+  const [catalogs, setCatalogs] = useState(null);
+  const [core, setCore] = useState({ state: "loading", channels: [], tools: [], indicators: null, score: null, journey: 1, canvasNotes: [] });
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [joining, setJoining] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [dialog, setDialog] = useState("");
   const [joinCode, setJoinCode] = useState("");
-  const [core, setCore] = useState({ client: null, channels: [], tools: [], indicators: null, score: null, state: "loading" });
-  const coreRef = useRef(null);
+  const [newCompany, setNewCompany] = useState({ sector: "", type: "", model: "", name: "", capital: 20000, difficulty: "intermediario", class_id: "", scenario_id: "base-estavel" });
+  const [order, setOrder] = useState({ input_id: "", quantity: 10, supplier_id: "padrao", term: 0 });
+  const [stockOrder, setStockOrder] = useState({ quantity: 10, term: 0 });
 
-  async function loadRemote({ force = false } = {}) {
-    if (dirty && !force && !window.confirm("Há alterações locais não sincronizadas. Descartá-las e recarregar do servidor?")) return;
-    setLoading(true); setError(""); setNotice("");
-    try {
-      const [companyResponse, classResponse] = await Promise.all([
-        fetch("/api/student/companies", { cache: "no-store" }),
-        fetch("/api/student/classes", { cache: "no-store" }),
-      ]);
-      const companyPayload = await companyResponse.json();
-      const classPayload = await classResponse.json();
-      if (!companyResponse.ok) throw new Error(companyPayload?.error || "Falha ao carregar empresas.");
-      const list = Array.isArray(companyPayload.companies) ? companyPayload.companies : [];
-      setCompanies(list);
-      setClasses(classResponse.ok && Array.isArray(classPayload.classes) ? classPayload.classes : []);
-      setSelectedID((current) => current && list.some((item) => item.id === current) ? current : list[0]?.id || "");
-      setDirty(false); setProcessed(false);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao carregar dados."); }
-    finally { setLoading(false); }
-  }
-
-  useEffect(() => { void loadRemote({ force: true }); }, []);
+  useEffect(() => {
+    const onNavigate = (event) => {
+      if (event?.detail?.role !== "aluno") return;
+      const view = String(event.detail.view || "empresa");
+      setActiveView(view);
+      window.dispatchEvent(new CustomEvent("jed:view", { detail: { role: "aluno", view } }));
+    };
+    window.addEventListener("jed:navigate", onNavigate);
+    return () => window.removeEventListener("jed:navigate", onNavigate);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function boot() {
+      setLoading(true); setError("");
       try {
-        const client = await createJEDClient(Date.now());
+        const [companiesResponse, classesResponse, loadedCatalogs, client] = await Promise.all([
+          fetch("/api/student/companies", { cache: "no-store" }),
+          fetch("/api/student/classes", { cache: "no-store" }),
+          loadCatalogs(),
+          createJEDClient(Date.now()),
+        ]);
+        const companiesPayload = await companiesResponse.json();
+        const classesPayload = await classesResponse.json();
+        if (!companiesResponse.ok) throw new Error(companiesPayload?.error || "Falha ao carregar empresas.");
+        if (!classesResponse.ok) throw new Error(classesPayload?.error || "Falha ao carregar turmas.");
         if (cancelled) { try { client.close(); } catch {} return; }
         coreRef.current = client;
-        setCore((state) => ({ ...state, client, channels: client.digitalChannels() || [], tools: client.digitalTools() || [], state: "ready" }));
+        const channels = client.digitalChannels();
+        const tools = client.digitalTools();
+        const nextCompanies = Array.isArray(companiesPayload.companies) ? companiesPayload.companies : [];
+        const nextClasses = Array.isArray(classesPayload.classes) ? classesPayload.classes : [];
+        setCatalogs(loadedCatalogs);
+        setCompanies(nextCompanies);
+        setClasses(nextClasses);
+        setSelectedID(nextCompanies[0]?.id || "");
+        setCore((current) => ({ ...current, state: "ready", channels, tools }));
       } catch (caught) {
-        if (!cancelled) setCore((state) => ({ ...state, state: "error", error: caught instanceof Error ? caught.message : String(caught) }));
-      }
-    })();
+        setCore((current) => ({ ...current, state: "error" }));
+        setError(caught instanceof Error ? caught.message : "Falha ao iniciar a versão Web.");
+      } finally { if (!cancelled) setLoading(false); }
+    }
+    void boot();
     return () => { cancelled = true; try { coreRef.current?.close(); } catch {} coreRef.current = null; };
   }, []);
 
-  const selected = useMemo(() => companies.find((item) => item.id === selectedID) || companies[0] || null, [companies, selectedID]);
+  const selected = useMemo(() => companies.find((item) => item.id === selectedID) || null, [companies, selectedID]);
 
   useEffect(() => {
-    if (!selected?.company) { setDraft(null); return; }
-    const revision = Number(selected.revision ?? selected.company.revision ?? 0);
-    let next = clone(selected.company); let restored = false; let wasProcessed = false;
-    try {
-      const saved = JSON.parse(localStorage.getItem(localKey(selected.id)) || "null");
-      if (saved && Number(saved.baseRevision) === revision && saved.company) { next = saved.company; restored = true; wasProcessed = Boolean(saved.processed); }
-    } catch { /* rascunho corrompido é ignorado */ }
-    setDraft(next); setBaseRevision(revision); setDirty(restored); setProcessed(wasProcessed);
-    if (restored) setNotice("Rascunho local restaurado. Sincronize quando estiver pronto.");
-  }, [selected?.id, selected?.revision]);
+    if (!selected) { setDraft(null); setDirty(false); return; }
+    setDraft(clone(selected.company)); setDirty(false);
+  }, [selectedID, selected?.revision]);
 
   useEffect(() => {
-    if (!draft || !selected?.id) return;
     const client = coreRef.current;
-    if (!client) return;
-    try { setCore((state) => ({ ...state, indicators: client.indicators(draft), score: client.score(draft) })); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao calcular indicadores."); }
-  }, [draft, selected?.id, core.state]);
+    if (!client || !draft || core.state !== "ready") return;
+    try {
+      const indicators = client.indicators(draft);
+      const score = client.score(draft);
+      const journey = client.journeyStep(draft)?.step || 1;
+      const canvasNotes = client.canvasExplanations(draft) || [];
+      setCore((current) => ({ ...current, indicators, score, journey, canvasNotes }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao calcular indicadores.");
+    }
+  }, [draft, core.state]);
 
   useEffect(() => {
-    if (!draft || !selected?.id || !dirty) return;
-    try { localStorage.setItem(localKey(selected.id), JSON.stringify({ baseRevision, company: draft, processed, savedAt: new Date().toISOString() })); }
-    catch { /* armazenamento local indisponível não impede a simulação */ }
-  }, [draft, dirty, processed, selected?.id, baseRevision]);
+    if (!catalogs?.business) return;
+    const sectors = sectorOptions(catalogs.business);
+    if (!newCompany.sector && sectors[0]) {
+      const types = sectors[0].tipos || [];
+      const models = types[0]?.especialidades || [];
+      setNewCompany((current) => ({ ...current, sector: sectors[0].id, type: types[0]?.id || "", model: models[0]?.id || "" }));
+    }
+  }, [catalogs, newCompany.sector]);
 
-  function edit(field, value) { if (processed) return; setDraft((current) => ({ ...current, [field]: value })); setDirty(true); setNotice("Decisões salvas localmente neste navegador."); }
-  function toggleList(field, id) { const current = Array.isArray(draft?.[field]) ? draft[field] : []; edit(field, current.includes(id) ? current.filter((value) => value !== id) : [...current, id]); }
-
-  function processWeek() {
-    setError(""); setNotice("");
-    if (!draft || !coreRef.current) { setError("JED Core ainda não está disponível."); return; }
-    const duration = Number(draft.duracao_semanas || 0);
-    if (duration > 0 && Number(draft.semana || 0) >= duration) { setError("A simulação já atingiu a última semana configurada."); return; }
-    try {
-      const result = coreRef.current.processWeek(clone(draft));
-      setDraft(result.empresa); setDirty(true); setProcessed(true);
-      setNotice(`Semana ${result.registro?.semana || result.empresa?.semana || ""} processada no JED Core. Sincronize para gravar no servidor.`);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao processar semana."); }
+  function activate(view) {
+    setActiveView(view);
+    window.dispatchEvent(new CustomEvent("jed:view", { detail: { role: "aluno", view } }));
   }
 
-  async function syncCompany() {
-    if (!draft || !selected) return;
-    setSyncing(true); setError(""); setNotice("");
+  function edit(field, value) { setDraft((current) => ({ ...current, [field]: value })); setDirty(true); setNotice(""); }
+  function editNested(group, field, value) { setDraft((current) => ({ ...current, [group]: { ...(current?.[group] || {}), [field]: value } })); setDirty(true); setNotice(""); }
+  function toggleList(field, id) { setDraft((current) => { const items = new Set(current?.[field] || []); if (items.has(id)) items.delete(id); else items.add(id); return { ...current, [field]: [...items] }; }); setDirty(true); }
+
+  async function syncCompany(company = draft, classID = selected?.class_id || company?.turma_id || "", silent = false) {
+    if (!company?.local_id) throw new Error("Empresa sem identificador local.");
+    const response = await fetch("/api/student/companies", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ local_id: company.local_id, class_id: classID, company }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error || "Falha ao sincronizar empresa.");
+    const remote = payload.company;
+    setCompanies((current) => {
+      const exists = current.some((item) => item.id === remote.id);
+      return exists ? current.map((item) => item.id === remote.id ? remote : item) : [...current, remote];
+    });
+    setSelectedID(remote.id);
+    setDraft(clone(remote.company));
+    setDirty(false);
+    if (!silent) setNotice("Empresa salva e sincronizada com o JED Servidor.");
+    return remote;
+  }
+
+  async function saveDraft() {
+    if (!draft) return;
+    setBusy(true); setError(""); setNotice("");
+    try { await syncCompany(draft, selected?.class_id || draft.turma_id || ""); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao salvar empresa."); }
+    finally { setBusy(false); }
+  }
+
+  async function createCompany(event) {
+    event.preventDefault();
+    if (!catalogs) return;
+    const model = enrichedModel(catalogs.business, newCompany.sector, newCompany.type, newCompany.model);
+    const classInfo = classes.find((item) => item.id === newCompany.class_id) || null;
+    const scenario = classInfo?.scenario || baseScenarios.find((item) => item.id === newCompany.scenario_id) || baseScenarios[0];
+    setBusy(true); setError(""); setNotice("");
     try {
-      const response = await fetch("/api/student/companies", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ local_id: draft.local_id, class_id: selected.class_id || draft.turma_id || "", company: draft }) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || "Falha ao sincronizar empresa.");
-      const remote = payload.company;
-      setCompanies((list) => list.map((item) => item.id === selected.id ? remote : item));
-      setBaseRevision(Number(remote.revision || 0)); setDraft(clone(remote.company)); setDirty(false); setProcessed(false);
-      try { localStorage.removeItem(localKey(selected.id)); } catch {}
-      setNotice("Empresa sincronizada com o JED Servidor.");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao sincronizar empresa."); }
-    finally { setSyncing(false); }
+      const company = createInitialCompany({ model, supplies: catalogs.supplies, user, name: newCompany.name, capital: newCompany.capital, difficulty: newCompany.difficulty, classInfo, scenario });
+      await syncCompany(company, classInfo?.id || "", true);
+      setDialog(""); setNotice(`Empresa ${company.nome} criada. Complete a Persona e o Lean Canvas antes da primeira rodada.`); activate("persona");
+      setNewCompany((current) => ({ ...current, name: "" }));
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao criar empresa."); }
+    finally { setBusy(false); }
+  }
+
+  async function processWeek() {
+    const client = coreRef.current;
+    if (!client || !draft) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = client.processWeek(draft);
+      const next = result.empresa;
+      await syncCompany(next, selected?.class_id || next.turma_id || "", true);
+      setNotice(`Semana ${result.registro?.semana || next.semana} processada pelo JED Core e sincronizada.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao processar semana."); }
+    finally { setBusy(false); }
+  }
+
+  async function placeOrder(event) {
+    event.preventDefault();
+    const client = coreRef.current;
+    if (!client || !draft || !catalogs) return;
+    const supplier = catalogs.supplies?.fornecedores?.find((item) => item.id === order.supplier_id);
+    if (!supplier) { setError("Fornecedor não encontrado."); return; }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = client.placeInputOrder(draft, order.input_id || draft.insumos?.[0]?.id, Number(order.quantity), supplier, Number(order.term));
+      if (!result.accepted) throw new Error(result.note || "Pedido não aceito.");
+      await syncCompany(result.empresa, selected?.class_id || result.empresa.turma_id || "", true);
+      setNotice(`Pedido registrado: ${result.note}. Custo ${money.format(Number(result.cost || 0))}.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao registrar pedido."); }
+    finally { setBusy(false); }
+  }
+
+  async function buyStock(event) {
+    event.preventDefault();
+    const client = coreRef.current;
+    if (!client || !draft) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = client.buyStock(draft, Number(stockOrder.quantity), Number(stockOrder.term));
+      if (!result.accepted) throw new Error(result.note || "Compra não aceita.");
+      await syncCompany(result.empresa, selected?.class_id || result.empresa.turma_id || "", true);
+      setNotice(`Compra registrada: ${result.note}. Custo ${money.format(Number(result.cost || 0))}.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao comprar estoque."); }
+    finally { setBusy(false); }
+  }
+
+  async function linkCompanyToClass(classInfo) {
+    if (!draft || !classInfo) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = { ...draft, turma_id: classInfo.id };
+      await syncCompany(next, classInfo.id, true);
+      setNotice(`Empresa ${next.nome} vinculada à turma ${classInfo.name}.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao vincular empresa à turma."); }
+    finally { setBusy(false); }
   }
 
   async function joinClass(event) {
-    event.preventDefault(); setError(""); setNotice("");
+    event.preventDefault();
     const code = joinCode.trim().toUpperCase();
-    if (!code) { setError("Informe o código da turma."); return; }
-    setJoining(true);
+    if (!code) return;
+    setBusy(true); setError(""); setNotice("");
     try {
       const response = await fetch("/api/student/classes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Falha ao entrar na turma.");
-      setJoinCode("");
       const classesResponse = await fetch("/api/student/classes", { cache: "no-store" });
       const classesPayload = await classesResponse.json();
-      if (classesResponse.ok) setClasses(Array.isArray(classesPayload.classes) ? classesPayload.classes : []);
-      setNotice(`Turma vinculada: ${payload.class?.name || "turma informada"}.`);
+      setClasses(Array.isArray(classesPayload.classes) ? classesPayload.classes : []);
+      setJoinCode(""); setNotice(`Turma vinculada: ${payload.class?.name || "turma informada"}.`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao entrar na turma."); }
-    finally { setJoining(false); }
+    finally { setBusy(false); }
   }
 
-  function membershipBlock() {
-    return <div className="class-membership"><div>{classes.length ? classes.map((cl) => <span className="membership-pill" key={cl.id}>{cl.name} · {cl.join_code}</span>) : <span className="student-muted">Nenhuma turma vinculada.</span>}</div><form className="inline-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Código da turma" autoCapitalize="characters" required /><button className="secondary-button" disabled={joining || !joinCode.trim()}>{joining ? "Entrando…" : "Entrar em turma"}</button></form></div>;
+  if (loading) return <section className="student-loading">CARREGANDO JED CORE, CATÁLOGOS E SERVIDOR…</section>;
+
+  const company = draft;
+  const sectors = sectorOptions(catalogs?.business);
+  const types = typeOptions(catalogs?.business, newCompany.sector);
+  const models = specialtyOptions(catalogs?.business, newCompany.sector, newCompany.type);
+  const currentModel = enrichedModel(catalogs?.business, newCompany.sector, newCompany.type, newCompany.model);
+  const indicators = core.indicators;
+  const score = core.score;
+  const last = company?.historico?.length ? company.historico[company.historico.length - 1] : null;
+
+  function companyToolbar() {
+    return <div className="orbit-toolbar sticky-module-toolbar"><button type="button" className="primary-button" onClick={() => setDialog("company")}>NOVO EMPREENDIMENTO</button>{companies.length ? <CompanyPicker companies={companies} selectedID={selectedID} onChange={(id) => { if (!dirty || window.confirm("Trocar de empresa e descartar alterações não salvas?")) setSelectedID(id); }} /> : null}{company ? <button type="button" className="secondary-button" onClick={saveDraft} disabled={!dirty || busy}>{busy ? "SALVANDO…" : dirty ? "SALVAR NO SERVIDOR" : "SINCRONIZADO"}</button> : null}</div>;
   }
 
-  if (loading) return <section className="student-loading">Carregando dados do JED Servidor…</section>;
+  function renderEmpresa() {
+    if (!company) return <><section className="orbit-overview-strip"><div><span>EMPRESA</span><strong>NENHUM EMPREENDIMENTO CRIADO</strong><small>Crie sua empresa diretamente no navegador usando o catálogo oficial do JED.</small></div><div className="orbit-stat-row"><div><span>TURMAS</span><strong>{classes.length}</strong></div><div><span>CORE</span><strong>{core.state === "ready" ? "OK" : "—"}</strong></div></div></section>{companyToolbar()}<RequireCompany onCreate={() => setDialog("company")} /></>;
+    return <><section className="student-company-head"><div><p className="eyebrow">MINHA EMPRESA</p><h1>{company.nome}</h1><p className="lede">{company.setor} → {company.tipo_negocio} → {company.especialidade}</p></div><div><span className="technical-label">SEMANA</span><strong className="big-week">{company.semana || 0}/{company.duracao_semanas || "—"}</strong></div></section>{companyToolbar()}<section className="student-metrics-grid"><Metric label="Caixa" value={money.format(Number(company.caixa || 0))} /><Metric label="Preço" value={money.format(Number(company.preco || 0))} /><Metric label="Clientes ativos" value={integer.format(Number(company.clientes_ativos || 0))} /><Metric label="Reputação" value={number.format(Number(company.reputacao || 0))} /><Metric label="Receita acumulada" value={indicators ? money.format(Number(indicators.Receita || 0)) : "…"} /><Metric label="Resultado acumulado" value={indicators ? money.format(Number(indicators.Resultado || 0)) : "…"} /><Metric label="Score JED" value={score ? number.format(Number(score.Total || 0)) : "…"} detail="motor Go/WASM" /><Metric label="Revisão" value={`#${selected?.revision || company.revision || 0}`} detail={fmtDate(selected?.updated_at || company.updated_at)} /></section><section className="workspace-two-col"><article className="workspace-card"><p className="eyebrow">IDENTIDADE</p><h2>Configuração do empreendimento</h2><dl className="student-data-list"><DataRow label="Responsável" value={company.responsavel} /><DataRow label="Cenário" value={company.cenario} /><DataRow label="Dificuldade" value={company.dificuldade} /><DataRow label="Capital próprio" value={money.format(Number(company.capital_proprio || 0))} /><DataRow label="Capacidade base" value={integer.format(Number(company.capacidade_base || 0))} /><DataRow label="Concorrência" value={company.concorrencia_nivel} /></dl></article><article className="workspace-card"><p className="eyebrow">ÚLTIMA RODADA</p><h2>{last ? `Semana ${last.semana}` : "Aguardando primeira semana"}</h2>{last ? <dl className="student-data-list"><DataRow label="Vendas" value={last.vendas} /><DataRow label="Receita" value={money.format(Number(last.receita || 0))} /><DataRow label="Resultado" value={money.format(Number(last.resultado || 0))} /><DataRow label="Evento" value={last.evento || "Nenhum"} /></dl> : <p className="student-muted">Complete Persona, Lean Canvas e decisões e então processe a primeira semana.</p>}</article></section></>;
+  }
 
-  if (!companies.length) return <>
-    <section id="empresa" className="student-empty orbit-section">
-      <p className="eyebrow">Minha empresa</p>
-      <h2>Esta conta ainda não possui uma empresa sincronizada.</h2>
-      <p>O vínculo com uma turma e a empresa são estados separados. Você pode entrar em uma turma agora; para liberar decisões e processamento, sincronize uma empresa criada na versão Windows.</p>
-      {classes.length ? <p className="student-muted"><strong>{classes.length} turma(s) vinculada(s).</strong> O vínculo já está ativo no servidor.</p> : null}
-    </section>
-    {error ? <div className="workspace-alert workspace-alert-error">ERRO · {error}</div> : null}
-    {notice ? <div className="workspace-alert workspace-alert-success">OK · {notice}</div> : null}
-    <section id="decisoes" className="workspace-section orbit-section">
-      <div className="workspace-section-head"><div><p className="eyebrow">Decisões</p><h2>Próxima semana</h2></div><span className="section-count">AGUARDANDO EMPRESA</span></div>
-      <article className="workspace-card"><p className="student-muted">As decisões ficam disponíveis assim que uma empresa pertencente a esta conta for sincronizada com o JED Servidor. Nenhuma decisão pode ser processada sem uma empresa-base.</p></article>
-    </section>
-    <section id="turmas" className="workspace-section orbit-section">
-      <div className="workspace-section-head"><div><p className="eyebrow">Turmas</p><h2>Vínculos online</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div>
-      <p className="section-help">Digite o código exibido pelo Mentor. Quando a operação for aceita, a turma aparecerá imediatamente abaixo e continuará vinculada após sair e entrar novamente.</p>
-      {membershipBlock()}
-    </section>
-  </>;
+  function renderPersona() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const fields = [["nome", "Nome / identidade"],["demografia", "Demografia"],["rotinas", "Rotinas"],["objetivos", "Objetivos"],["desafios", "Desafios"],["motivadores", "Motivadores"],["objecoes", "Objeções"],["citacoes", "Citações"],["palavras_chave", "Palavras-chave"]];
+    return <><div className="workspace-section-head"><div><p className="eyebrow">PERSONA</p><h2>Cliente principal</h2></div><button className="primary-button" type="button" onClick={saveDraft} disabled={!dirty || busy}>SALVAR PERSONA</button></div><p className="section-help">Descreva uma pessoa reconhecível, com necessidades, hábitos, objetivos e objeções. Estes dados influenciam o acompanhamento pedagógico e o Canvas.</p><div className="form-card-grid">{fields.map(([field,label]) => <label className="workspace-card edit-card" key={field}><span className="technical-label">{label}</span><textarea rows={field === "nome" ? 2 : 4} value={company.persona?.[field] || ""} onChange={(e) => editNested("persona", field, e.target.value)} /></label>)}</div></>;
+  }
 
-  const remote = selected; const company = draft || remote.company || {}; const indicators = core.indicators; const score = core.score;
-  const last = company.historico?.length ? company.historico[company.historico.length - 1] : null;
-  const duration = Number(company.duracao_semanas || 0); const week = Number(company.semana || 0); const progress = duration ? Math.min(100, week / duration * 100) : 0;
-  const disabled = processed || syncing;
+  function renderCanvas() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const c = company.canvas || {};
+    return <><div className="workspace-section-head"><div><p className="eyebrow">LEAN CANVAS</p><h2>Hipóteses do modelo de negócio</h2></div><button className="primary-button" type="button" onClick={saveDraft} disabled={!dirty || busy}>SALVAR CANVAS</button></div>{core.canvasNotes?.length ? <div className="workspace-alert workspace-alert-success">EFEITOS ATIVOS · {core.canvasNotes.join(" · ")}</div> : null}<div className="canvas-grid"><label className="workspace-card edit-card"><span className="technical-label">PROBLEMA</span><textarea rows="5" value={c.problema || ""} onChange={(e) => editNested("canvas","problema",e.target.value)} /></label><label className="workspace-card edit-card"><span className="technical-label">SEGMENTOS</span><textarea rows="5" value={csv(c.segmentos)} onChange={(e) => editNested("canvas","segmentos",list(e.target.value))} /></label><label className="workspace-card edit-card"><span className="technical-label">PROPOSTA DE VALOR</span><textarea rows="5" value={c.proposta_valor || ""} onChange={(e) => editNested("canvas","proposta_valor",e.target.value)} /></label><label className="workspace-card edit-card"><span className="technical-label">SOLUÇÃO</span><textarea rows="5" value={c.solucao || ""} onChange={(e) => editNested("canvas","solucao",e.target.value)} /></label><label className="workspace-card edit-card"><span className="technical-label">CANAIS</span><textarea rows="5" value={csv(c.canais)} onChange={(e) => editNested("canvas","canais",list(e.target.value))} /></label><label className="workspace-card edit-card"><span className="technical-label">RECEITAS</span><textarea rows="5" value={c.receita_modelo || ""} onChange={(e) => editNested("canvas","receita_modelo",e.target.value)} /></label><label className="workspace-card edit-card"><span className="technical-label">ESTRUTURA DE CUSTOS</span><textarea rows="5" value={c.custos_notas || ""} onChange={(e) => editNested("canvas","custos_notas",e.target.value)} /></label><label className="workspace-card edit-card"><span className="technical-label">MÉTRICAS</span><textarea rows="5" value={csv(c.metricas)} onChange={(e) => editNested("canvas","metricas",list(e.target.value))} /></label><label className="workspace-card edit-card"><span className="technical-label">VANTAGEM</span><textarea rows="5" value={c.vantagem || ""} onChange={(e) => editNested("canvas","vantagem",e.target.value)} /></label></div></>;
+  }
+
+  function renderDigital() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    return <><div className="workspace-section-head"><div><p className="eyebrow">PRESENÇA DIGITAL</p><h2>Canais e ferramentas</h2></div><button className="primary-button" type="button" onClick={saveDraft} disabled={!dirty || busy}>SALVAR SELEÇÃO</button></div><Checklist title="Canais digitais" items={core.channels} selected={company.canais_digitais || []} onToggle={(id) => toggleList("canais_digitais", id)} /><Checklist title="Ferramentas digitais" items={core.tools} selected={company.ferramentas_digitais || []} onToggle={(id) => toggleList("ferramentas_digitais", id)} /></>;
+  }
+
+  function renderDecisoes() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const finished = Number(company.duracao_semanas || 0) > 0 && Number(company.semana || 0) >= Number(company.duracao_semanas || 0);
+    return <><div className="workspace-section-head"><div><p className="eyebrow">DECISÕES</p><h2>Semana {Number(company.semana || 0) + 1}</h2></div><span className="section-count">{finished ? "SIMULAÇÃO CONCLUÍDA" : "PRONTA PARA PROCESSAR"}</span></div><div className="workspace-two-col"><article className="workspace-card"><div className="decision-grid"><label>PREÇO<input type="number" min="0" step="0.01" value={company.preco ?? 0} onChange={(e) => edit("preco", Number(e.target.value))} /></label><label>MARKETING SEMANAL<input type="number" min="0" step="1" value={company.marketing_semanal ?? 0} onChange={(e) => edit("marketing_semanal", Number(e.target.value))} /></label><label>DESCONTO PROMOCIONAL (%)<input type="number" min="0" max="35" step="1" value={company.promocao_desconto ?? 0} onChange={(e) => edit("promocao_desconto", Number(e.target.value))} /></label><label>FUNCIONÁRIOS<input type="number" min="0" step="1" value={company.funcionarios ?? 0} onChange={(e) => edit("funcionarios", Math.max(0, Math.trunc(Number(e.target.value))))} /></label><label>SALÁRIO MÉDIO<input type="number" min="0" step="10" value={company.salario_medio ?? 0} onChange={(e) => edit("salario_medio", Number(e.target.value))} /></label><label>LOCALIZAÇÃO<select value={company.qualidade_localizacao || "media"} onChange={(e) => edit("qualidade_localizacao", e.target.value)}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></label><label>OPERAÇÃO<select value={company.operacao || "hibrida"} onChange={(e) => edit("operacao", e.target.value)}><option value="fisica">Física</option><option value="digital">Digital</option><option value="hibrida">Híbrida</option></select></label><label className="toggle-row"><input type="checkbox" checked={Boolean(company.delivery)} onChange={(e) => edit("delivery", e.target.checked)} /><span>Usar delivery</span></label></div></article><article className="workspace-card process-card"><p className="eyebrow">MOTOR GO</p><h2>Processar semana</h2><p className="student-muted">A rodada é calculada pelo JED Core WebAssembly e sincronizada automaticamente com o servidor Oracle.</p><dl className="student-data-list"><DataRow label="Cenário" value={company.cenario} /><DataRow label="Concorrência" value={number.format(Number(company.concorrencia_indice || 1))} /><DataRow label="Caixa antes" value={money.format(Number(company.caixa || 0))} /><DataRow label="Estoque" value={money.format(Number(company.estoque_valor || 0))} /></dl><div className="process-actions"><button className="primary-button" type="button" onClick={processWeek} disabled={busy || core.state !== "ready" || finished}>{busy ? "PROCESSANDO…" : finished ? "SIMULAÇÃO CONCLUÍDA" : "PROCESSAR E SINCRONIZAR"}</button><button className="secondary-button" type="button" onClick={saveDraft} disabled={!dirty || busy}>SALVAR SEM PROCESSAR</button></div></article></div></>;
+  }
+
+  function renderInsumos() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const suppliers = catalogs?.supplies?.fornecedores || [];
+    if (company.usa_insumos && company.insumos?.length) return <><div className="workspace-section-head"><div><p className="eyebrow">INSUMOS</p><h2>Estoque e pedidos</h2></div><span className="section-count">{money.format(Number(company.estoque_valor || 0))}</span></div><div className="table-wrap"><table className="workspace-table"><thead><tr><th>Insumo</th><th>Quantidade</th><th>Unidade</th><th>Custo médio</th><th>Consumo/venda</th><th>Crítico</th></tr></thead><tbody>{company.insumos.map((item) => <tr key={item.id}><td><strong>{item.nome}</strong></td><td>{number.format(Number(item.quantidade || 0))}</td><td>{item.unidade}</td><td>{money.format(Number(item.custo_medio || 0))}</td><td>{number.format(Number(item.consumo_por_venda || 0))}</td><td>{item.critico ? "SIM" : "NÃO"}</td></tr>)}</tbody></table></div><form className="workspace-card order-form" onSubmit={placeOrder}><p className="eyebrow">NOVO PEDIDO</p><div className="orbit-form-four"><label>INSUMO<select value={order.input_id || company.insumos[0]?.id || ""} onChange={(e) => setOrder({ ...order, input_id: e.target.value })}>{company.insumos.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label><label>QUANTIDADE<input type="number" min="0.01" step="0.01" value={order.quantity} onChange={(e) => setOrder({ ...order, quantity: e.target.value })} /></label><label>FORNECEDOR<select value={order.supplier_id} onChange={(e) => setOrder({ ...order, supplier_id: e.target.value })}>{suppliers.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label><label>PAGAMENTO<select value={order.term} onChange={(e) => setOrder({ ...order, term: Number(e.target.value) })}><option value="0">À vista</option><option value="1">1 semana</option><option value="2">2 semanas</option></select></label></div><button className="primary-button" disabled={busy}>REGISTRAR PEDIDO</button></form>{company.pedidos_insumos?.length ? <div className="table-wrap"><table className="workspace-table"><thead><tr><th>Pedido em trânsito</th><th>Quantidade</th><th>Fornecedor</th><th>Entrega</th></tr></thead><tbody>{company.pedidos_insumos.map((item, index) => <tr key={`${item.insumo_id}-${index}`}><td>{item.insumo_nome}</td><td>{number.format(Number(item.quantidade || 0))}</td><td>{item.fornecedor}</td><td>Semana {item.semana_entrega}</td></tr>)}</tbody></table></div> : null}</>;
+    if (company.usa_estoque) return <><div className="workspace-section-head"><div><p className="eyebrow">ESTOQUE</p><h2>Mercadoria</h2></div><span className="section-count">{integer.format(Number(company.estoque_unidades || 0))} UN.</span></div><form className="workspace-card order-form" onSubmit={buyStock}><div className="orbit-form-two"><label>QUANTIDADE<input type="number" min="1" step="1" value={stockOrder.quantity} onChange={(e) => setStockOrder({ ...stockOrder, quantity: e.target.value })} /></label><label>PAGAMENTO<select value={stockOrder.term} onChange={(e) => setStockOrder({ ...stockOrder, term: Number(e.target.value) })}><option value="0">À vista</option><option value="1">1 semana</option><option value="2">2 semanas</option></select></label></div><button className="primary-button" disabled={busy}>COMPRAR ESTOQUE</button></form></>;
+    return <section className="workspace-card"><p className="eyebrow">INSUMOS</p><h2>Este modelo não utiliza estoque detalhado.</h2><p className="student-muted">Os custos unitários são tratados diretamente pelo motor da simulação.</p></section>;
+  }
+
+  function renderFinanceiro() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const receivable = (company.contas_receber || []).reduce((sum,item) => sum + Number(item.valor || 0),0);
+    const payable = (company.contas_pagar || []).reduce((sum,item) => sum + Number(item.valor || 0),0);
+    return <><div className="student-metrics-grid"><Metric label="Caixa" value={money.format(Number(company.caixa || 0))} /><Metric label="A receber" value={money.format(receivable)} /><Metric label="A pagar" value={money.format(payable)} /><Metric label="Dívida" value={money.format(Number(company.divida || 0))} /><Metric label="Resultado acumulado" value={indicators ? money.format(Number(indicators.Resultado || 0)) : "…"} /><Metric label="Receita acumulada" value={indicators ? money.format(Number(indicators.Receita || 0)) : "…"} /></div><div className="workspace-two-col"><article><div className="workspace-section-head"><div><p className="eyebrow">CONTAS A RECEBER</p></div></div><div className="table-wrap"><table className="workspace-table"><thead><tr><th>Semana</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>{company.contas_receber?.length ? company.contas_receber.map((item,index) => <tr key={index}><td>{item.semana}</td><td>{item.descricao}</td><td>{money.format(Number(item.valor || 0))}</td></tr>) : <tr><td colSpan="3" className="empty-cell">Sem contas a receber.</td></tr>}</tbody></table></div></article><article><div className="workspace-section-head"><div><p className="eyebrow">CONTAS A PAGAR</p></div></div><div className="table-wrap"><table className="workspace-table"><thead><tr><th>Semana</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>{company.contas_pagar?.length ? company.contas_pagar.map((item,index) => <tr key={index}><td>{item.semana}</td><td>{item.descricao}</td><td>{money.format(Number(item.valor || 0))}</td></tr>) : <tr><td colSpan="3" className="empty-cell">Sem contas a pagar.</td></tr>}</tbody></table></div></article></div></>;
+  }
+
+  function renderIndicadores() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    return <><div className="student-metrics-grid"><Metric label="Score total" value={score ? number.format(Number(score.Total || 0)) : "…"} /><Metric label="Financeiro" value={score ? number.format(Number(score.Financeiro || 0)) : "…"} /><Metric label="Mercado" value={score ? number.format(Number(score.Mercado || 0)) : "…"} /><Metric label="Operação" value={score ? number.format(Number(score.Operacao || 0)) : "…"} /><Metric label="Hipóteses" value={score ? number.format(Number(score.Hipoteses || 0)) : "…"} /><Metric label="Gestão" value={score ? number.format(Number(score.Gestao || 0)) : "…"} /><Metric label="Conversão" value={indicators ? `${number.format(Number(indicators.ConversaoAcumuladaPct || 0))}%` : "…"} /><Metric label="Ticket médio" value={indicators ? money.format(Number(indicators.TicketMedio || 0)) : "…"} /></div>{score?.Observacoes?.length ? <div className="workspace-card"><p className="eyebrow">LEITURA DO SCORE</p><ul className="plain-list">{score.Observacoes.map((item,index) => <li key={index}>{item}</li>)}</ul></div> : null}<div className="table-wrap"><table className="workspace-table"><thead><tr><th>Semana</th><th>Vendas</th><th>Receita</th><th>Resultado</th><th>Caixa</th><th>Conversão</th><th>Evento</th></tr></thead><tbody>{company.historico?.length ? [...company.historico].reverse().map((item) => <tr key={item.semana}><td>{item.semana}</td><td>{item.vendas}</td><td>{money.format(Number(item.receita || 0))}</td><td>{money.format(Number(item.resultado || 0))}</td><td>{money.format(Number(item.caixa || 0))}</td><td>{number.format(Number(item.conversao_observada_pct || 0))}%</td><td>{item.evento || "—"}</td></tr>) : <tr><td colSpan="7" className="empty-cell">Processe a primeira semana para formar o histórico.</td></tr>}</tbody></table></div></>;
+  }
+
+  function renderJornada() {
+    if (!company) return <RequireCompany onCreate={() => setDialog("company")} />;
+    const step = Math.max(1, Math.min(4, Number(core.journey || 1)));
+    const steps = [
+      [1,"Sua ideia de negócio","Defina a empresa, Persona e Lean Canvas."],
+      [2,"Seu negócio na internet","Escolha canais digitais coerentes com a Persona."],
+      [3,"Venda mais na internet","Teste preço, marketing, promoção e acompanhe conversão."],
+      [4,"Ferramentas de apoio","Use ferramentas digitais e indicadores para revisar hipóteses."],
+    ];
+    return <><section className="journey-head"><p className="eyebrow">JORNADA JED</p><h2>Passo atual: {step} de 4</h2><p className="student-muted">A Jornada organiza o percurso. Persona e Lean Canvas continuam editáveis durante toda a simulação.</p></section><div className="journey-grid">{steps.map(([id,title,description]) => <button type="button" key={id} className={id === step ? "journey-card active" : id < step ? "journey-card done" : "journey-card"} onClick={() => activate(id === 1 ? "persona" : id === 2 ? "digital" : id === 3 ? "decisoes" : "indicadores")}><span>PASSO {id}</span><strong>{title}</strong><small>{description}</small></button>)}</div></>;
+  }
+
+  function renderTurmas() {
+    return <><div className="workspace-section-head"><div><p className="eyebrow">TURMAS</p><h2>Vínculos online</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div><form className="inline-form class-join-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="CÓDIGO DA TURMA" /><button className="primary-button" disabled={busy || !joinCode.trim()}>ENTRAR NA TURMA</button></form><div className="class-grid">{classes.length ? classes.map((cl) => <article className="workspace-card" key={cl.id}><p className="eyebrow">TURMA</p><h3>{cl.name}</h3><dl className="student-data-list"><DataRow label="Código" value={cl.join_code} /><DataRow label="Cenário" value={cl.scenario?.nome || "Mercado estável"} /><DataRow label="Duração" value={`${cl.scenario?.duracao || 12} semanas`} /><DataRow label="Dificuldade" value={cl.scenario?.dificuldade || "intermediario"} /></dl>{company ? <button type="button" className={selected?.class_id === cl.id || company.turma_id === cl.id ? "secondary-button" : "primary-button"} disabled={busy || selected?.class_id === cl.id || company.turma_id === cl.id} onClick={() => linkCompanyToClass(cl)}>{selected?.class_id === cl.id || company.turma_id === cl.id ? "EMPRESA VINCULADA" : "VINCULAR EMPRESA ATUAL"}</button> : null}</article>) : <article className="workspace-card"><p className="student-muted">Nenhuma turma vinculada. Digite o código fornecido pelo Mentor.</p></article>}</div></>;
+  }
+
+  const view = activeView === "empresa" ? renderEmpresa() : activeView === "persona" ? renderPersona() : activeView === "canvas" ? renderCanvas() : activeView === "digital" ? renderDigital() : activeView === "decisoes" ? renderDecisoes() : activeView === "insumos" ? renderInsumos() : activeView === "financeiro" ? renderFinanceiro() : activeView === "indicadores" ? renderIndicadores() : activeView === "jornada" ? renderJornada() : renderTurmas();
 
   return <>
-    <section id="empresa" className="student-company-head"><div><p className="eyebrow">Empresa do Aluno</p><h1>{company.nome || "Empresa sem nome"}</h1><p className="lede">{company.modelo_base || company.especialidade || "Modelo não informado"}{company.setor ? ` · ${company.setor}` : ""}</p></div><div className="student-company-actions"><CompanyPicker companies={companies} selectedID={remote.id} onChange={(id) => { if (!dirty || window.confirm("Trocar de empresa e descartar alterações locais não sincronizadas?")) setSelectedID(id); }} /><button className="secondary-button" onClick={() => loadRemote()} disabled={syncing}>Atualizar do servidor</button></div></section>
+    {error ? <div className="workspace-alert workspace-alert-error">ERRO · {error}</div> : null}
+    {notice ? <div className="workspace-alert workspace-alert-success">OK · {notice}</div> : null}
+    <section id={activeView} className="module-view">{view}</section>
 
-    <section className={dirty ? "student-sync-strip sync-pending" : "student-sync-strip"}><div><span className="status-dot" /><strong>{dirty ? "Alterações locais pendentes" : "Sincronizado com o servidor"}</strong></div><span>Revisão {remote.revision ?? company.revision ?? 0}</span><span>Atualizado {formatDate(remote.updated_at || company.updated_at)}</span><span>{user.email}</span></section>
-    {error ? <div className="workspace-alert workspace-alert-error">{error}</div> : null}{notice ? <div className="workspace-alert workspace-alert-success">{notice}</div> : null}
-
-    <section className="student-progress"><div><strong>Semana {week}{duration ? ` de ${duration}` : ""}</strong><span>{duration ? `${number.format(progress)}% da simulação` : "Duração não definida"}</span></div><div className="student-progress-track"><span style={{ width: `${progress}%` }} /></div></section>
-
-    <section className="student-metrics-grid"><Metric label="Caixa" value={money.format(Number(company.caixa || 0))} /><Metric label="Preço" value={money.format(Number(company.preco || 0))} /><Metric label="Clientes ativos" value={integer.format(Number(company.clientes_ativos || 0))} /><Metric label="Reputação" value={number.format(Number(company.reputacao || 0))} /><Metric label="Receita acumulada" value={indicators ? money.format(Number(indicators.Receita || 0)) : "…"} /><Metric label="Resultado acumulado" value={indicators ? money.format(Number(indicators.Resultado || 0)) : "…"} /><Metric label="Vendas acumuladas" value={indicators ? integer.format(Number(indicators.Vendas || 0)) : "…"} /><Metric label="Score JED" value={score ? number.format(Number(score.Total || 0)) : "…"} detail="calculado pelo Core Go" /></section>
-
-    <section id="decisoes" className="workspace-two-col student-editor-layout">
-      <article className="workspace-card"><p className="eyebrow">Decisões</p><h2>Próxima semana</h2><div className="decision-grid"><label>Preço<input type="number" step="0.01" min="0" value={company.preco ?? 0} onChange={(e) => edit("preco", Number(e.target.value))} disabled={disabled} /></label><label>Marketing semanal<input type="number" step="1" min="0" value={company.marketing_semanal ?? 0} onChange={(e) => edit("marketing_semanal", Number(e.target.value))} disabled={disabled} /></label><label>Desconto promocional (%)<input type="number" step="1" min="0" max="35" value={company.promocao_desconto ?? 0} onChange={(e) => edit("promocao_desconto", Number(e.target.value))} disabled={disabled} /></label><label>Funcionários<input type="number" step="1" min="0" value={company.funcionarios ?? 0} onChange={(e) => edit("funcionarios", Math.max(0, Math.trunc(Number(e.target.value))))} disabled={disabled} /></label><label className="toggle-row"><input type="checkbox" checked={Boolean(company.delivery)} onChange={(e) => edit("delivery", e.target.checked)} disabled={disabled} /><span>Usar delivery</span></label></div><CheckList title="Canais digitais" items={core.channels} selected={company.canais_digitais || []} onToggle={(id) => toggleList("canais_digitais", id)} disabled={disabled} /><CheckList title="Ferramentas digitais" items={core.tools} selected={company.ferramentas_digitais || []} onToggle={(id) => toggleList("ferramentas_digitais", id)} disabled={disabled} /></article>
-
-      <article className="workspace-card process-card"><p className="eyebrow">Rodada</p><h2>Processar e sincronizar</h2><p className="student-muted">O processamento ocorre localmente no navegador pelo mesmo motor Go da versão Windows. Depois, a empresa é enviada ao JED Servidor.</p>{last ? <dl className="student-data-list"><div><dt>Última semana</dt><dd>{last.semana}</dd></div><div><dt>Vendas</dt><dd>{integer.format(Number(last.vendas || 0))}</dd></div><div><dt>Receita</dt><dd>{money.format(Number(last.receita || 0))}</dd></div><div><dt>Resultado</dt><dd>{money.format(Number(last.resultado || 0))}</dd></div><div><dt>Evento</dt><dd>{last.evento || "Nenhum"}</dd></div></dl> : null}<div className="process-actions"><button className="primary-button" onClick={processWeek} disabled={disabled || core.state !== "ready" || (duration > 0 && week >= duration)}>{processed ? "Semana processada" : "Processar semana"}</button><button className="secondary-button" onClick={syncCompany} disabled={!dirty || syncing}>{syncing ? "Sincronizando…" : "Sincronizar com servidor"}</button></div>{dirty ? <small className="draft-note">Rascunho protegido no armazenamento local deste navegador.</small> : null}</article>
-    </section>
-
-    <section id="turmas" className="workspace-section orbit-section"><div className="workspace-section-head"><div><p className="eyebrow">Turmas</p><h2>Vínculos</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div>{membershipBlock()}</section>
+    <Modal open={dialog === "company"} title="NOVO EMPREENDIMENTO" subtitle="Catálogo oficial: Setor → Tipo → Especialidade → dados iniciais." onClose={() => setDialog("")}>
+      <form className="orbit-form" onSubmit={createCompany}>
+        <div className="wizard-steps"><span>1 SETOR</span><span>2 TIPO</span><span>3 ESPECIALIDADE</span><span>4 EMPRESA</span></div>
+        <label>SETOR<select value={newCompany.sector} onChange={(e) => { const sector = e.target.value; const nextTypes = typeOptions(catalogs?.business, sector); const nextModels = nextTypes[0]?.especialidades || []; setNewCompany({ ...newCompany, sector, type: nextTypes[0]?.id || "", model: nextModels[0]?.id || "" }); }}>{sectors.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
+        <label>TIPO DE NEGÓCIO<select value={newCompany.type} onChange={(e) => { const type = e.target.value; const nextModels = specialtyOptions(catalogs?.business, newCompany.sector, type); setNewCompany({ ...newCompany, type, model: nextModels[0]?.id || "" }); }}>{types.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
+        <label>ESPECIALIDADE<select value={newCompany.model} onChange={(e) => setNewCompany({ ...newCompany, model: e.target.value })}>{models.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
+        {currentModel ? <div className="catalog-preview"><div><span>PREÇO REF.</span><strong>{money.format(Number(currentModel.preco_ref || 0))}</strong></div><div><span>CAPACIDADE</span><strong>{integer.format(Number(currentModel.capacidade_base || 0))}/sem.</strong></div><div><span>CUSTO UNIT.</span><strong>{money.format(Number(currentModel.custo_unitario || 0))}</strong></div></div> : null}
+        <div className="orbit-form-two"><label>NOME DA EMPRESA<input value={newCompany.name} onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })} placeholder={currentModel?.nome || "Minha empresa"} required /></label><label>CAPITAL PRÓPRIO<input type="number" min="0" step="100" value={newCompany.capital} onChange={(e) => setNewCompany({ ...newCompany, capital: e.target.value })} required /></label></div>
+        <div className="orbit-form-two"><label>DIFICULDADE<select value={newCompany.difficulty} onChange={(e) => setNewCompany({ ...newCompany, difficulty: e.target.value })}><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></label><label>TURMA (OPCIONAL)<select value={newCompany.class_id} onChange={(e) => setNewCompany({ ...newCompany, class_id: e.target.value })}><option value="">Sem turma</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+        {!newCompany.class_id ? <label>CENÁRIO<select value={newCompany.scenario_id} onChange={(e) => setNewCompany({ ...newCompany, scenario_id: e.target.value })}>{baseScenarios.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label> : <div className="activation-note"><strong>CENÁRIO</strong><span>A empresa usará o cenário definido pela turma selecionada.</span></div>}
+        {error ? <div className="form-error">{error}</div> : null}
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog("")}>CANCELAR</button><button className="primary-button" disabled={busy || !newCompany.model}>{busy ? "CRIANDO…" : "CRIAR EMPRESA"}</button></div>
+      </form>
+    </Modal>
   </>;
 }

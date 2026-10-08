@@ -56,6 +56,18 @@ func main() {
 	expose(api, "review", func(args []js.Value) any {
 		return svc.Review(argString(args, 0))
 	})
+	expose(api, "placeInputOrder", func(args []js.Value) any {
+		return svc.PlaceInputOrder(argInt(args, 0), argString(args, 1), argString(args, 2), argString(args, 3), argString(args, 4), argString(args, 5))
+	})
+	expose(api, "buyStock", func(args []js.Value) any {
+		return svc.BuyStock(argString(args, 0), argString(args, 1), argString(args, 2))
+	})
+	expose(api, "journeyStep", func(args []js.Value) any {
+		return svc.JourneyStep(argString(args, 0))
+	})
+	expose(api, "canvasExplanations", func(args []js.Value) any {
+		return svc.CanvasExplanations(argString(args, 0))
+	})
 	expose(api, "digitalChannels", func(args []js.Value) any { return svc.DigitalChannels() })
 	expose(api, "digitalTools", func(args []js.Value) any { return svc.DigitalTools() })
 

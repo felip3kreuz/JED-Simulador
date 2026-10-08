@@ -134,3 +134,13 @@ Na RC1.7:
 ## W6.1 — Onboarding + Interface Órbita Clean
 
 A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1.8: Aluno, Mentor por credencial MTR e ativação de convite individual. Login/cadastro mantêm o token do servidor exclusivamente em cookie Secure + HttpOnly. A interface foi redesenhada com a mesma paleta, tipografia, grade técnica e hierarquia visual da GUI Win32. Detalhes em `docs/W6_1_ONBOARDING_UI.md`.
+
+## W7.0 — Web Parity
+
+- interface do Aluno deixa de depender da versão Windows para criar a empresa;
+- catálogo completo Setor → Tipo → Especialidade fica disponível na Web;
+- Persona, Lean Canvas, canais, ferramentas, decisões, insumos, financeiro, indicadores e Jornada entram no painel Web;
+- processamento semanal continua no JED Core Go compilado para WebAssembly;
+- ponte WASM ganha operações de compras/insumos e utilitários de Jornada/Canvas;
+- Mentor ganha cenários persistidos no JED Servidor, turmas com cenário, CSV de alunos e resultados;
+- navegação lateral passa a trocar módulos reais em vez de depender de âncoras.

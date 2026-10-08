@@ -26,7 +26,7 @@ export default function Home() {
             <div className="orbit-core-box"><CoreStatus /></div>
           </div>
         </section>
-        <footer className="orbit-footer"><span>JED SIMULADOR · RC1.8</span><span>WEB W6.1 · ONBOARDING + INTERFACE</span></footer>
+        <footer className="orbit-footer"><span>JED SIMULADOR · RC1.8</span><span>WEB W7.0 · SIMULAÇÃO COMPLETA</span></footer>
       </main>
     </div>
   );

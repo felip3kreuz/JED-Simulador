@@ -20,6 +20,12 @@ func (s *Simulator) ProcessWeek(e *Empresa) Registro {
 	return ProcessWeek(e, s.rng)
 }
 
+// RandomSource exposes the simulator-owned deterministic RNG to bridge helpers
+// that must follow the same random stream as weekly processing.
+func (s *Simulator) RandomSource() RandomSource {
+	return s.rng
+}
+
 // Indicators returns the current aggregate indicators.
 func (s *Simulator) Indicators(e *Empresa) *Indicadores {
 	return Indicators(e)

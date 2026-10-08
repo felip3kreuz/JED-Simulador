@@ -4,96 +4,70 @@ import { useEffect, useMemo, useState } from "react";
 
 const navigation = {
   admin: [
-    ["#visao-geral", "VISÃO GERAL", "contas e estado"],
-    ["#usuarios", "USUÁRIOS", "acesso e permissões"],
-    ["#credenciais", "MENTORES", "credenciais MTR"],
+    ["visao-geral", "VISÃO GERAL", "contas e estado"],
+    ["usuarios", "USUÁRIOS", "acesso e permissões"],
+    ["credenciais", "MENTORES", "credenciais MTR"],
   ],
   mentor: [
-    ["#visao-geral", "VISÃO GERAL", "turmas e empresas"],
-    ["#turmas", "TURMAS", "códigos e resultados"],
-    ["#alunos", "ALUNOS", "convites individuais"],
+    ["visao-geral", "VISÃO GERAL", "turmas e resultados"],
+    ["cenarios", "CENÁRIOS", "ambientes pedagógicos"],
+    ["turmas", "TURMAS", "códigos e configuração"],
+    ["alunos", "ALUNOS", "convites e vínculos"],
+    ["resultados", "RESULTADOS", "empresas sincronizadas"],
   ],
   aluno: [
-    ["#empresa", "MINHA EMPRESA", "situação atual"],
-    ["#decisoes", "DECISÕES", "próxima semana"],
-    ["#turmas", "TURMAS", "vínculos online"],
+    ["empresa", "MINHA EMPRESA", "criar e selecionar"],
+    ["persona", "PERSONA", "cliente principal"],
+    ["canvas", "LEAN CANVAS", "modelo de negócio"],
+    ["digital", "CANAIS E FERRAMENTAS", "presença digital"],
+    ["decisoes", "DECISÕES", "próxima semana"],
+    ["insumos", "INSUMOS", "estoque e compras"],
+    ["financeiro", "FINANCEIRO", "caixa e compromissos"],
+    ["indicadores", "INDICADORES", "score e histórico"],
+    ["jornada", "JORNADA JED", "percurso pedagógico"],
+    ["turmas", "TURMAS", "vínculos online"],
   ],
 };
-
-function sectionFor(href) {
-  if (!href?.startsWith("#")) return null;
-  return document.getElementById(href.slice(1));
-}
 
 export default function PanelNavigation({ role }) {
   const items = useMemo(() => navigation[role] || [], [role]);
   const [active, setActive] = useState(items[0]?.[0] || "");
 
   useEffect(() => {
-    if (!items.length) return undefined;
+    setActive(items[0]?.[0] || "");
+    const onView = (event) => {
+      if (event?.detail?.role && event.detail.role !== role) return;
+      const view = String(event?.detail?.view || "");
+      if (items.some(([candidate]) => candidate === view)) setActive(view);
+    };
+    window.addEventListener("jed:view", onView);
+    return () => window.removeEventListener("jed:view", onView);
+  }, [items, role]);
 
-    const initialHash = window.location.hash;
-    if (initialHash && items.some(([href]) => href === initialHash) && sectionFor(initialHash)) {
-      setActive(initialHash);
-    } else {
-      setActive(items[0][0]);
-    }
+  function navigate(view) {
+    setActive(view);
+    window.dispatchEvent(new CustomEvent("jed:navigate", { detail: { role, view } }));
 
-    const sections = items
-      .map(([href]) => ({ href, element: sectionFor(href) }))
-      .filter(({ element }) => Boolean(element));
-
-    if (!sections.length || !("IntersectionObserver" in window)) return undefined;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (!visible?.target?.id) return;
-        const href = `#${visible.target.id}`;
-        if (items.some(([candidate]) => candidate === href)) setActive(href);
-      },
-      { rootMargin: "-15% 0px -65% 0px", threshold: [0, 0.05, 0.2, 0.5] },
-    );
-
-    sections.forEach(({ element }) => observer.observe(element));
-    return () => observer.disconnect();
-  }, [items]);
-
-  function navigate(event, href) {
-    event.preventDefault();
-    const target = sectionFor(href);
-    if (!target) return;
-
-    setActive(href);
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.history.replaceState(null, "", href);
-
-    if (typeof target.focus === "function") {
-      const previousTabIndex = target.getAttribute("tabindex");
-      target.setAttribute("tabindex", "-1");
-      window.setTimeout(() => {
-        target.focus({ preventScroll: true });
-        if (previousTabIndex === null) target.removeAttribute("tabindex");
-        else target.setAttribute("tabindex", previousTabIndex);
-      }, 350);
-    }
+    // Admin ainda usa seções contínuas; este fallback mantém esse painel funcional.
+    window.setTimeout(() => {
+      const target = document.getElementById(view);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   return (
     <nav>
-      {items.map(([href, label, detail]) => (
-        <a
-          key={href}
-          href={href}
-          className={active === href ? "active" : ""}
-          aria-current={active === href ? "location" : undefined}
-          onClick={(event) => navigate(event, href)}
+      {items.map(([view, label, detail]) => (
+        <button
+          key={view}
+          type="button"
+          className={active === view ? "active orbit-nav-button" : "orbit-nav-button"}
+          aria-current={active === view ? "page" : undefined}
+          onClick={() => navigate(view)}
         >
           <strong>{label}</strong>
           <span>{detail}</span>
-        </a>
+        </button>
       ))}
     </nav>
   );

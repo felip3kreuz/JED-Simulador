@@ -502,3 +502,9 @@ button { color: inherit; }
   .student-data-list dd { text-align: left; }
 }
 .orbit-command-rail { max-height: calc(100vh - 28px); overflow-y: auto; }
+
+/* W7.1.1 — atalhos de acesso funcionais */
+.auth-link-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.auth-link-row .secondary-button { display: grid; place-items: center; text-decoration: none; text-align: center; }
+.orbit-command[href] { cursor: pointer; }
+@media (max-width: 640px) { .auth-link-row { grid-template-columns: 1fr; } }

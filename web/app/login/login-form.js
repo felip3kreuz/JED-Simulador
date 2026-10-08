@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export default function LoginForm() {
+export default function LoginForm({ firstAccess = false }) {
   const [status, setStatus] = useState({ state: "checking", message: "VERIFICANDO JED SERVIDOR…" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,14 +40,18 @@ export default function LoginForm() {
   return (
     <div className="orbit-auth-panel">
       <div className={`server-state server-state-${status.state}`}><span className="status-dot" />{status.message}</div>
-      <div className="orbit-auth-heading"><span>JED ONLINE</span><h2>ENTRAR</h2><p>Use o e-mail e a senha da sua conta existente.</p></div>
+      <div className="orbit-auth-heading"><span>{firstAccess ? "PRIMEIRO ACESSO" : "JED ONLINE"}</span><h2>{firstAccess ? "ENTRAR COM SENHA TEMPORÁRIA" : "ENTRAR"}</h2><p>{firstAccess ? "Use o e-mail cadastrado e a senha temporária recebida por e-mail. A troca da senha será exigida em seguida." : "Use o e-mail e a senha da sua conta existente."}</p></div>
       <form onSubmit={submit} className="orbit-form">
         <label>E-MAIL<input name="email" type="email" autoComplete="email" required /></label>
         <label>SENHA<input name="password" type="password" autoComplete="current-password" required /></label>
         {error ? <div className="form-error" role="alert">{error}</div> : null}
-        <button className="primary-button" type="submit" disabled={submitting || status.state === "error"}>{submitting ? "ENTRANDO…" : "ENTRAR"}</button>
+        <button className="primary-button" type="submit" disabled={submitting || status.state === "error"}>{submitting ? "ENTRANDO…" : firstAccess ? "CONTINUAR PRIMEIRO ACESSO" : "ENTRAR"}</button>
       </form>
-      <div className="activation-note"><strong>CADASTRO</strong><span>Contas são criadas exclusivamente por Administradores. Se este for seu primeiro acesso, use a senha temporária recebida por e-mail.</span></div>
+      <div className="activation-note"><strong>{firstAccess ? "TROCA OBRIGATÓRIA" : "CADASTRO"}</strong><span>{firstAccess ? "Após autenticar, a plataforma abrirá a tela para substituir a senha temporária." : "Contas são criadas exclusivamente por Administradores. Se este for seu primeiro acesso, use a opção PRIMEIRO ACESSO."}</span></div>
+      <div className="auth-link-row">
+        {firstAccess ? <a className="secondary-button" href="/login">LOGIN NORMAL</a> : <a className="secondary-button" href="/primeiro-acesso">PRIMEIRO ACESSO</a>}
+        <a className="secondary-button" href="/admin">CADASTRO CENTRALIZADO</a>
+      </div>
     </div>
   );
 }

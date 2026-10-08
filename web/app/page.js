@@ -16,12 +16,12 @@ export default function Home() {
           </div>
           <div className="orbit-command-stack">
             <Link href="/login" className="orbit-command accent-cyan"><strong>JED ONLINE</strong><span>Entrar com uma conta cadastrada por um Administrador.</span></Link>
-            <div className="orbit-command"><strong>CADASTRO CENTRALIZADO</strong><span>Contas de Aluno, Mentor e Administrador são criadas exclusivamente no painel administrativo.</span></div>
-            <div className="orbit-command"><strong>PRIMEIRO ACESSO</strong><span>Use a senha temporária recebida por e-mail e substitua-a por uma senha pessoal.</span></div>
+            <Link href="/admin" className="orbit-command accent-amber"><strong>CADASTRO CENTRALIZADO</strong><span>Área exclusiva de Administradores para cadastrar usuários individualmente ou por CSV.</span></Link>
+            <Link href="/primeiro-acesso" className="orbit-command"><strong>PRIMEIRO ACESSO</strong><span>Entrar com a senha temporária recebida por e-mail e substituí-la por uma senha pessoal.</span></Link>
             <div className="orbit-core-box"><CoreStatus /></div>
           </div>
         </section>
-        <footer className="orbit-footer"><span>JED SIMULADOR · RC1.8</span><span>WEB W7.1 · CADASTRO CENTRALIZADO</span></footer>
+        <footer className="orbit-footer"><span>JED SIMULADOR · RC1.8</span><span>WEB W7.1.1 · ACESSO CORRIGIDO</span></footer>
       </main>
     </div>
   );

@@ -155,3 +155,11 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - status de entrega exibido no painel administrativo;
 - autocadastro público, ativação por convite e credenciamento MTR desativados para novos fluxos;
 - Mentores continuam administrando cenários, turmas e resultados, mas não criam contas.
+
+
+## W7.1.1 — acessos da tela inicial
+
+- corrige os comandos PRIMEIRO ACESSO e CADASTRO CENTRALIZADO, que eram blocos visuais sem navegação;
+- adiciona rota dedicada `/primeiro-acesso`;
+- adiciona atalhos equivalentes na tela de login;
+- não altera o servidor.

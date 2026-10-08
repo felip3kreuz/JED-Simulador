@@ -1,24 +1,7 @@
 import Link from "next/link";
 import LogoutButton from "@/components/logout-button";
+import PanelNavigation from "@/components/panel-navigation";
 import { roleLabel } from "@/lib/roles";
-
-const navigation = {
-  admin: [
-    ["#visao-geral", "VISÃO GERAL", "contas e estado"],
-    ["#usuarios", "USUÁRIOS", "acesso e permissões"],
-    ["#credenciais", "MENTORES", "credenciais MTR"],
-  ],
-  mentor: [
-    ["#visao-geral", "VISÃO GERAL", "turmas e empresas"],
-    ["#turmas", "TURMAS", "códigos e resultados"],
-    ["#convites", "ALUNOS", "convites individuais"],
-  ],
-  aluno: [
-    ["#empresa", "MINHA EMPRESA", "situação atual"],
-    ["#decisoes", "DECISÕES", "próxima semana"],
-    ["#turmas", "TURMAS", "vínculos online"],
-  ],
-};
 
 export function JEDChrome({ compact = false }) {
   return (
@@ -29,7 +12,7 @@ export function JEDChrome({ compact = false }) {
       </Link>
       <div className="orbit-chrome-meta">
         <span className="orbit-help">F1 AJUDA&nbsp;&nbsp;•&nbsp;&nbsp;WEB ONLINE</span>
-        <strong>SYS 2.0 RC1.8 / W6.1</strong>
+        <strong>SYS 2.0 RC1.8 / W6.3</strong>
       </div>
     </header>
   );
@@ -46,7 +29,6 @@ export function PublicScreenTitle({ title, subtitle }) {
 }
 
 export default function JEDShell({ user, role, title, subtitle, children }) {
-  const items = navigation[role] || [];
   return (
     <div className="jed-app-shell">
       <JEDChrome />
@@ -60,14 +42,7 @@ export default function JEDShell({ user, role, title, subtitle, children }) {
               <small>{user.email}</small>
               {user.institution ? <small>{user.institution}</small> : null}
             </div>
-            <nav>
-              {items.map(([href, label, detail], index) => (
-                <a key={href} href={href} className={index === 0 ? "active" : ""}>
-                  <strong>{label}</strong>
-                  <span>{detail}</span>
-                </a>
-              ))}
-            </nav>
+            <PanelNavigation role={role} />
             <div className="orbit-rail-foot">
               <span className="orbit-status-line"><i /> SERVIDOR ONLINE</span>
               <LogoutButton />

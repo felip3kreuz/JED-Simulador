@@ -123,7 +123,7 @@ export default function MentorWorkspace({ user }) {
       </div>
     </section>
 
-    <section id="convites" className="workspace-section orbit-section">
+    <section id="alunos" className="workspace-section orbit-section">
       <div className="workspace-section-head"><div><p className="eyebrow">ALUNOS</p><h2>CONVITES INDIVIDUAIS</h2></div><button className="secondary-button" type="button" onClick={() => setDialog("invite")} disabled={!data.classes.length}>NOVO CONVITE</button></div>
       <p className="section-help">A senha não é escolhida pelo Mentor. O Aluno usa o código em <strong>ATIVAR CONVITE DE ALUNO</strong> e cria a própria senha.</p>
       <div className="table-wrap"><table className="workspace-table"><thead><tr><th>Aluno</th><th>E-mail</th><th>Código</th><th>Situação</th></tr></thead><tbody>{data.invitations.length ? data.invitations.map((inv) => <tr key={inv.code}><td>{inv.name}</td><td>{inv.email}</td><td><CopyCode code={inv.code} /></td><td>{inv.redeemed_at ? <span className="state-label used">UTILIZADO</span> : inv.revoked_at ? <span className="state-label revoked">REVOGADO</span> : <span className="state-label active">ATIVO</span>}</td></tr>) : <tr><td colSpan="4" className="empty-cell">Nenhum convite individual emitido.</td></tr>}</tbody></table></div>

@@ -125,3 +125,15 @@ excluído do repositório por `.gitignore`.
 ## Web W6.1 — cadastro e interface Órbita Clean
 
 A W6.1 adiciona cadastro/ativação Web completos para Aluno e Mentor, preserva ativação de convite individual e reformula Login, Administrador, Mentor e Aluno para seguir a identidade visual da interface Windows. Consulte `docs/W6_1_ONBOARDING_UI.md`.
+
+
+## W6.2 — Fluxo do Aluno sem empresa
+
+Corrige navegação e feedback de vínculo de turma para contas de Aluno que ainda não possuem empresa sincronizada. Consulte `docs/W6_2_STUDENT_FLOW.md`.
+
+## Web W6.3 — navegação e favicon
+
+- consolida as correções do fluxo do Aluno introduzidas na W6.2;
+- corrige a navegação lateral de Administrador, Mentor e Aluno com rolagem explícita e item ativo;
+- corrige VISÃO GERAL, TURMAS e ALUNOS no painel Mentor;
+- usa no site o mesmo `jed_icon.ico` do executável Windows como favicon.

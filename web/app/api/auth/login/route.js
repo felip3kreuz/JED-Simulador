@@ -26,7 +26,7 @@ export async function POST(request) {
     });
 
     const user = { ...login.user, role: normalizeRole(login.user?.role) };
-    const response = NextResponse.json({ user, redirectTo: roleHome(user.role) });
+    const response = NextResponse.json({ user, redirectTo: user.must_change_password ? "/alterar-senha" : roleHome(user.role) });
     response.headers.set("Cache-Control", "private, no-store");
     response.cookies.set(SESSION_COOKIE, login.token, sessionCookieOptions());
     return response;

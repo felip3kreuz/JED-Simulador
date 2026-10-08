@@ -28,6 +28,10 @@ export async function requireRole(expectedRole) {
   const user = await currentUser();
   if (!user) redirect("/login");
 
+  if (user.must_change_password) redirect("/alterar-senha");
+
+  if (user.must_change_password) redirect("/alterar-senha");
+
   const expected = normalizeRole(expectedRole);
   if (user.role !== expected) {
     redirect(roleHome(user.role));

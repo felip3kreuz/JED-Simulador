@@ -141,3 +141,9 @@ Corrige navegação e feedback de vínculo de turma para contas de Aluno que ain
 ## Web W7.0 — paridade funcional
 
 A W7.0 substitui o portal parcial W6.x por uma versão Web funcional do simulador: criação de empresa pelo catálogo Setor → Tipo → Especialidade, Persona, Lean Canvas, canais/ferramentas, decisões e processamento via Go/WASM, insumos, financeiro, indicadores, Jornada JED, turmas e sincronização. O Mentor também passa a criar cenários persistentes, associá-los a turmas, importar alunos por CSV e acompanhar resultados. Consulte `docs/W7_0_WEB_PARITY.md`.
+
+## Web W7.1 — Contas gerenciadas pelo Administrador
+
+A W7.1 centraliza a criação de contas no painel de Administração. Alunos, Mentores e novos Administradores podem ser cadastrados individualmente ou importados por CSV. Todas as novas contas recebem a senha temporária `acbd1234`, com troca obrigatória no primeiro acesso. Quando o SMTP está configurado, o servidor envia automaticamente um aviso de cadastro ao e-mail informado.
+
+Modelo: `MODELO_IMPORTACAO_USUARIOS.csv`.

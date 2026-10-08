@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function LoginForm() {
@@ -48,11 +47,7 @@ export default function LoginForm() {
         {error ? <div className="form-error" role="alert">{error}</div> : null}
         <button className="primary-button" type="submit" disabled={submitting || status.state === "error"}>{submitting ? "ENTRANDO…" : "ENTRAR"}</button>
       </form>
-      <div className="orbit-auth-actions">
-        <Link className="orbit-action-tile accent-cyan" href="/cadastro/aluno"><strong>CADASTRAR ALUNO</strong><span>Crie a própria conta e senha.</span></Link>
-        <Link className="orbit-action-tile" href="/cadastro/mentor"><strong>CADASTRAR MENTOR</strong><span>Exige credencial MTR.</span></Link>
-        <Link className="orbit-action-tile" href="/cadastro/convite"><strong>ATIVAR CONVITE DE ALUNO</strong><span>Compatibilidade com convite individual.</span></Link>
-      </div>
+      <div className="activation-note"><strong>CADASTRO</strong><span>Contas são criadas exclusivamente por Administradores. Se este for seu primeiro acesso, use a senha temporária recebida por e-mail.</span></div>
     </div>
   );
 }

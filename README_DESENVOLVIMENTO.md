@@ -144,3 +144,14 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - ponte WASM ganha operações de compras/insumos e utilitários de Jornada/Canvas;
 - Mentor ganha cenários persistidos no JED Servidor, turmas com cenário, CSV de alunos e resultados;
 - navegação lateral passa a trocar módulos reais em vez de depender de âncoras.
+
+## W7.1 — Cadastro centralizado
+
+- cadastro de Aluno, Mentor e Administrador exclusivo do Administrador;
+- cadastro individual ou por CSV (`nome,email,papel,instituicao,id_institucional`);
+- senha temporária padrão `acbd1234` para novas contas;
+- troca obrigatória da senha no primeiro acesso;
+- aviso de cadastro enviado por SMTP ao endereço cadastrado;
+- status de entrega exibido no painel administrativo;
+- autocadastro público, ativação por convite e credenciamento MTR desativados para novos fluxos;
+- Mentores continuam administrando cenários, turmas e resultados, mas não criam contas.

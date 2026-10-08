@@ -6,13 +6,13 @@ const navigation = {
   admin: [
     ["visao-geral", "VISÃO GERAL", "contas e estado"],
     ["usuarios", "USUÁRIOS", "acesso e permissões"],
-    ["credenciais", "MENTORES", "credenciais MTR"],
+    ["importacao", "IMPORTAR CSV", "cadastro em lote"],
   ],
   mentor: [
     ["visao-geral", "VISÃO GERAL", "turmas e resultados"],
     ["cenarios", "CENÁRIOS", "ambientes pedagógicos"],
     ["turmas", "TURMAS", "códigos e configuração"],
-    ["alunos", "ALUNOS", "convites e vínculos"],
+    ["alunos", "ALUNOS", "vínculos das turmas"],
     ["resultados", "RESULTADOS", "empresas sincronizadas"],
   ],
   aluno: [

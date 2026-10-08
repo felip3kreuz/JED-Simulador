@@ -48,6 +48,8 @@ type loginAttempt struct {
 	When time.Time
 }
 
+const defaultProvisionedPassword = "acbd1234"
+
 var loginGuard = struct {
 	sync.Mutex
 	Attempts map[string][]loginAttempt
@@ -321,6 +323,37 @@ func (st *serverState) createUserProfile(name, email, password, role, institutio
 	return u, st.saveLocked()
 }
 
+func (st *serverState) createProvisionedUser(actor OnlineUser, name, email, role, institution, institutionalID string) (OnlineUser, error) {
+	if actor.Role != "admin" || !activeStatus(actor.Status) {
+		return OnlineUser{}, errors.New("somente administradores podem cadastrar usuários")
+	}
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "tutor" {
+		role = "mentor"
+	}
+	if role != "aluno" && role != "mentor" && role != "admin" {
+		return OnlineUser{}, errors.New("papel inválido")
+	}
+	u, err := st.createUserProfile(name, email, defaultProvisionedPassword, role, institution, institutionalID)
+	if err != nil {
+		return OnlineUser{}, err
+	}
+	st.mu.Lock()
+	rec := st.Users[u.ID]
+	rec.MustChangePassword = true
+	if role == "mentor" {
+		rec.CanInviteMentors = false
+	}
+	st.Users[u.ID] = rec
+	err = st.saveLocked()
+	st.mu.Unlock()
+	if err != nil {
+		return OnlineUser{}, err
+	}
+	u = rec.OnlineUser
+	return st.deliverAccountCreatedEmail(u, defaultProvisionedPassword), nil
+}
+
 func (st *serverState) authenticate(email, password string) (OnlineUser, bool) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	st.mu.RLock()
@@ -377,10 +410,22 @@ func apiErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, APIError{Error: msg})
 }
 
-func (st *serverState) require(w http.ResponseWriter, r *http.Request, roles ...string) (OnlineUser, bool) {
+func (st *serverState) requireSession(w http.ResponseWriter, r *http.Request) (OnlineUser, bool) {
 	u, ok := st.sessionUser(r)
 	if !ok {
 		apiErr(w, 401, "sessão inválida ou expirada")
+		return OnlineUser{}, false
+	}
+	return u, true
+}
+
+func (st *serverState) require(w http.ResponseWriter, r *http.Request, roles ...string) (OnlineUser, bool) {
+	u, ok := st.requireSession(w, r)
+	if !ok {
+		return OnlineUser{}, false
+	}
+	if u.MustChangePassword {
+		apiErr(w, 428, "troque a senha temporária antes de continuar")
 		return OnlineUser{}, false
 	}
 	if len(roles) > 0 {
@@ -801,7 +846,7 @@ func (st *serverState) handler() http.Handler {
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, r *http.Request) {
-		u, ok := st.require(w, r)
+		u, ok := st.requireSession(w, r)
 		if !ok {
 			return
 		}
@@ -809,73 +854,19 @@ func (st *serverState) handler() http.Handler {
 	})
 
 	mux.HandleFunc("/api/v1/register/student", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			Name            string `json:"name"`
-			Email           string `json:"email"`
-			Password        string `json:"password"`
-			InstitutionalID string `json:"institutional_id"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		u, err := st.createUserProfile(in.Name, in.Email, in.Password, "aluno", "", in.InstitutionalID)
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 201, OnlineLoginResponse{Token: st.newSession(u.ID), User: u})
+		apiErr(w, 403, "cadastro de Aluno é realizado exclusivamente por Administradores")
 	})
 	mux.HandleFunc("/api/v1/register/mentor", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			Name            string `json:"name"`
-			Email           string `json:"email"`
-			Password        string `json:"password"`
-			Institution     string `json:"institution"`
-			InstitutionalID string `json:"institutional_id"`
-			CredentialCode  string `json:"credential_code"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		out, err := st.redeemMentorInvitation(in.CredentialCode, in.Name, in.Email, in.Password, in.Institution, in.InstitutionalID)
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 201, out)
+		apiErr(w, 403, "cadastro de Mentor é realizado por Administradores")
 	})
-
 	mux.HandleFunc("/api/v1/invitations/redeem", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			Code     string `json:"code"`
-			Password string `json:"password"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		out, err := st.redeemInvitation(in.Code, in.Password)
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 200, out)
+		apiErr(w, 403, "ativação por convite foi desativada; contas de Aluno são criadas por Administradores")
 	})
 	mux.HandleFunc("/api/v1/invitations", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			apiErr(w, 403, "Mentores não podem cadastrar Alunos; use o painel do Administrador")
+			return
+		}
 		u, ok := st.require(w, r, "tutor", "mentor")
 		if !ok {
 			return
@@ -915,6 +906,10 @@ func (st *serverState) handler() http.Handler {
 	})
 
 	mux.HandleFunc("/api/v1/mentor-invitations", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			apiErr(w, 403, "cadastro de Mentor é realizado pelo painel do Administrador")
+			return
+		}
 		u, ok := st.require(w, r, "tutor", "mentor", "admin")
 		if !ok {
 			return
@@ -1034,12 +1029,124 @@ func (st *serverState) handler() http.Handler {
 			apiErr(w, 400, "JSON inválido")
 			return
 		}
-		u, err := st.createAdmin(actor, in.Name, in.Email, in.Password)
+		u, err := st.createProvisionedUser(actor, in.Name, in.Email, "admin", "", "")
 		if err != nil {
 			apiErr(w, 400, err.Error())
 			return
 		}
 		writeJSON(w, 201, u)
+	})
+
+	mux.HandleFunc("/api/v1/admin/users/create", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			Name            string `json:"name"`
+			Email           string `json:"email"`
+			Role            string `json:"role"`
+			Institution     string `json:"institution"`
+			InstitutionalID string `json:"institutional_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		u, err := st.createProvisionedUser(actor, in.Name, in.Email, in.Role, in.Institution, in.InstitutionalID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 201, u)
+	})
+
+	mux.HandleFunc("/api/v1/admin/users/import", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			Users []struct {
+				Name            string `json:"name"`
+				Email           string `json:"email"`
+				Role            string `json:"role"`
+				Institution     string `json:"institution"`
+				InstitutionalID string `json:"institutional_id"`
+			} `json:"users"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		if len(in.Users) == 0 {
+			apiErr(w, 400, "a lista está vazia")
+			return
+		}
+		if len(in.Users) > 1000 {
+			apiErr(w, 400, "a importação aceita no máximo 1000 usuários por arquivo")
+			return
+		}
+		created := []OnlineUser{}
+		errorsOut := []map[string]any{}
+		for i, row := range in.Users {
+			u, err := st.createProvisionedUser(actor, row.Name, row.Email, row.Role, row.Institution, row.InstitutionalID)
+			if err != nil {
+				errorsOut = append(errorsOut, map[string]any{"row": i + 2, "email": row.Email, "error": err.Error()})
+				continue
+			}
+			created = append(created, u)
+		}
+		writeJSON(w, 200, map[string]any{"created": created, "errors": errorsOut, "temporary_password": defaultProvisionedPassword})
+	})
+
+	mux.HandleFunc("/api/v1/admin/users/resend-email", func(w http.ResponseWriter, r *http.Request) {
+		_, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			UserID string `json:"user_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		st.mu.RLock()
+		rec, exists := st.Users[in.UserID]
+		st.mu.RUnlock()
+		if !exists {
+			apiErr(w, 404, "usuário não encontrado")
+			return
+		}
+		if !rec.MustChangePassword {
+			apiErr(w, 400, "a senha temporária já foi substituída; não é possível reenviar essa credencial")
+			return
+		}
+		writeJSON(w, 200, st.deliverAccountCreatedEmail(rec.OnlineUser, defaultProvisionedPassword))
+	})
+
+	mux.HandleFunc("/api/v1/admin/email-status", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := st.require(w, r, "admin"); !ok {
+			return
+		}
+		if r.Method != "GET" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		writeJSON(w, 200, emailConfigurationStatus())
 	})
 
 	mux.HandleFunc("/api/v1/admin/user-status", func(w http.ResponseWriter, r *http.Request) {
@@ -1117,27 +1224,10 @@ func (st *serverState) handler() http.Handler {
 	})
 
 	mux.HandleFunc("/api/v1/users/student", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		if _, ok := st.require(w, r, "tutor", "mentor"); !ok {
-			return
-		}
-		var in struct{ Name, Email, Password string }
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		u, err := st.createUser(in.Name, in.Email, in.Password, "aluno")
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 201, u)
+		apiErr(w, 403, "cadastro de Aluno é realizado exclusivamente por Administradores")
 	})
 	mux.HandleFunc("/api/v1/password", func(w http.ResponseWriter, r *http.Request) {
-		u, ok := st.require(w, r)
+		u, ok := st.requireSession(w, r)
 		if !ok {
 			return
 		}
@@ -1166,6 +1256,7 @@ func (st *serverState) handler() http.Handler {
 		}
 		rec.Salt = randomHex(16)
 		rec.Hash = passwordHash(in.New, rec.Salt)
+		rec.MustChangePassword = false
 		st.Users[u.ID] = rec
 		err := st.saveLocked()
 		st.mu.Unlock()
@@ -1214,6 +1305,35 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, inv)
+	})
+
+	mux.HandleFunc("/api/v1/mentor/students", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := st.require(w, r, "tutor", "mentor")
+		if !ok {
+			return
+		}
+		if r.Method != "GET" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		st.mu.RLock()
+		ids := map[string]bool{}
+		for _, cl := range st.Classes {
+			if cl.TutorID == u.ID {
+				for _, id := range cl.StudentIDs {
+					ids[id] = true
+				}
+			}
+		}
+		out := []OnlineUser{}
+		for id := range ids {
+			if rec, exists := st.Users[id]; exists {
+				out = append(out, rec.OnlineUser)
+			}
+		}
+		st.mu.RUnlock()
+		sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+		writeJSON(w, 200, out)
 	})
 
 	mux.HandleFunc("/api/v1/scenarios", func(w http.ResponseWriter, r *http.Request) {
@@ -1738,7 +1858,7 @@ func runServerCLI(args []string) error {
 	} else if configured {
 		log.Printf("E-mail automático: configurado via SMTP %s:%d (%s)", cfg.Host, cfg.Port, cfg.Security)
 	} else {
-		log.Printf("E-mail automático: não configurado. Credenciais de Mentor continuarão disponíveis para envio manual.")
+		log.Printf("E-mail automático: não configurado. Contas poderão ser criadas, mas os avisos de cadastro não serão enviados até configurar o SMTP.")
 		log.Printf("Para configurar: JED_Servidor.exe --configure-email")
 	}
 

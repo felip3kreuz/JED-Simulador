@@ -12,11 +12,11 @@ export async function GET() {
     if (!user) throw new JEDServerError("Sessão inválida ou expirada.", 401);
     if (normalizeRole(user.role) !== "admin") throw new JEDServerError("Acesso permitido apenas para Administradores.", 403);
     const token = await sessionToken();
-    const [users, mentorInvitations] = await Promise.all([
+    const [users, email] = await Promise.all([
       jedServerRequest("/api/v1/admin/users", { token }),
-      jedServerRequest("/api/v1/mentor-invitations", { token }),
+      jedServerRequest("/api/v1/admin/email-status", { token }),
     ]);
-    return NextResponse.json({ users, mentor_invitations: mentorInvitations }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ users, email }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const status = error instanceof JEDServerError ? error.status : 500;
     return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao carregar administração." }, { status, headers: { "Cache-Control": "private, no-store" } });

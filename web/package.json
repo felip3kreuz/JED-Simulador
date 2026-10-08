@@ -1,6 +1,6 @@
 {
   "name": "jed-simulador-web",
-  "version": "2.0.0-rc1.8-web-w7.1.1",
+  "version": "2.0.0-rc1.8-web-w7.2",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -262,3 +262,100 @@ func TestMentorScenarioAPI(t *testing.T) {
 		t.Fatalf("lista de cenários incompleta: %d", len(list))
 	}
 }
+
+func TestMentorEvaluatesOwnCompanyAndStudentSyncPreservesEvaluation(t *testing.T) {
+	st := newServerState(t.TempDir())
+	mentor, err := st.createUser("Mentor Avaliador", "mentor-avalia@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createUser("Aluno Avaliado", "aluno-avalia@example.com", "SenhaAluno123", "aluno")
+	if err != nil {
+		t.Fatal(err)
+	}
+	class := OnlineClass{ID: "tur-avalia", Name: "Turma Avaliação", TutorID: mentor.ID, JoinCode: "AV1234", StudentIDs: []string{student.ID}, Scenario: cenariosBase[0]}
+	st.Classes[class.ID] = class
+	companyKey := student.ID + ":empresa-1"
+	st.Companies[companyKey] = RemoteCompany{ID: companyKey, OwnerID: student.ID, ClassID: class.ID, Revision: 1, Company: Empresa{LocalID: "empresa-1", Nome: "Negócio Teste"}}
+
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+	mentorToken := st.newSession(mentor.ID)
+
+	body, _ := json.Marshal(map[string]string{
+		"company_id": companyKey,
+		"status":     "aprovado",
+		"comment":    "Aprovado, mas com ressalvas sobre a validação do público-alvo.",
+	})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/mentor/companies/evaluate", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+mentorToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("avaliação retornou HTTP %d", resp.StatusCode)
+	}
+	var evaluated RemoteCompany
+	if err := json.NewDecoder(resp.Body).Decode(&evaluated); err != nil {
+		t.Fatal(err)
+	}
+	if evaluated.ApprovalStatus != "aprovado" || evaluated.MentorComment == "" || evaluated.EvaluatedBy != mentor.ID || evaluated.EvaluatedAt == "" {
+		t.Fatalf("avaliação inválida: %#v", evaluated)
+	}
+
+	studentToken := st.newSession(student.ID)
+	studentBody, _ := json.Marshal(map[string]any{
+		"class_id": class.ID,
+		"company":  Empresa{LocalID: "empresa-1", Nome: "Negócio Teste Atualizado"},
+	})
+	req, _ = http.NewRequest(http.MethodPut, ts.URL+"/api/v1/companies/empresa-1", bytes.NewReader(studentBody))
+	req.Header.Set("Authorization", "Bearer "+studentToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp2, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("sincronização do aluno retornou HTTP %d", resp2.StatusCode)
+	}
+	var synced RemoteCompany
+	if err := json.NewDecoder(resp2.Body).Decode(&synced); err != nil {
+		t.Fatal(err)
+	}
+	if synced.ApprovalStatus != "aprovado" || synced.MentorComment != evaluated.MentorComment || synced.EvaluatedBy != mentor.ID {
+		t.Fatalf("sincronização apagou avaliação: %#v", synced)
+	}
+}
+
+func TestMentorCannotEvaluateCompanyFromAnotherMentor(t *testing.T) {
+	st := newServerState(t.TempDir())
+	mentorA, _ := st.createUser("Mentor A", "mentor-a@example.com", "SenhaMentor123", "mentor")
+	mentorB, _ := st.createUser("Mentor B", "mentor-b@example.com", "SenhaMentor123", "mentor")
+	student, _ := st.createUser("Aluno", "aluno-outro@example.com", "SenhaAluno123", "aluno")
+	class := OnlineClass{ID: "tur-a", Name: "Turma A", TutorID: mentorA.ID, JoinCode: "A12345", StudentIDs: []string{student.ID}, Scenario: cenariosBase[0]}
+	st.Classes[class.ID] = class
+	companyKey := student.ID + ":empresa-2"
+	st.Companies[companyKey] = RemoteCompany{ID: companyKey, OwnerID: student.ID, ClassID: class.ID, Revision: 1, Company: Empresa{LocalID: "empresa-2", Nome: "Negócio A"}}
+
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+	body, _ := json.Marshal(map[string]string{"company_id": companyKey, "status": "reprovado", "comment": "Sem autorização."})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/mentor/companies/evaluate", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+st.newSession(mentorB.ID))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Mentor de outra turma deveria receber 403; recebeu %d", resp.StatusCode)
+	}
+	if got := st.Companies[companyKey].ApprovalStatus; got != "" {
+		t.Fatalf("empresa não autorizada foi alterada: %q", got)
+	}
+}

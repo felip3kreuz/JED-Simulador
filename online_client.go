@@ -69,12 +69,17 @@ type OnlineScenario struct {
 }
 
 type RemoteCompany struct {
-	ID        string  `json:"id"`
-	OwnerID   string  `json:"owner_id"`
-	ClassID   string  `json:"class_id,omitempty"`
-	Revision  int     `json:"revision"`
-	UpdatedAt string  `json:"updated_at"`
-	Company   Empresa `json:"company"`
+	ID              string  `json:"id"`
+	OwnerID         string  `json:"owner_id"`
+	ClassID         string  `json:"class_id,omitempty"`
+	Revision        int     `json:"revision"`
+	UpdatedAt       string  `json:"updated_at"`
+	ApprovalStatus  string  `json:"approval_status,omitempty"` // aprovado | reprovado
+	MentorComment   string  `json:"mentor_comment,omitempty"`
+	EvaluatedAt     string  `json:"evaluated_at,omitempty"`
+	EvaluatedBy     string  `json:"evaluated_by,omitempty"`
+	EvaluatedByName string  `json:"evaluated_by_name,omitempty"`
+	Company         Empresa `json:"company"`
 }
 
 type APIError struct {

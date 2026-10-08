@@ -1574,6 +1574,13 @@ func (st *serverState) handler() http.Handler {
 		in.Company.Revision = rev
 		in.Company.UpdatedAt = now
 		rc := RemoteCompany{ID: key, OwnerID: u.ID, ClassID: in.ClassID, Revision: rev, UpdatedAt: now, Company: in.Company}
+		if exists {
+			rc.ApprovalStatus = prev.ApprovalStatus
+			rc.MentorComment = prev.MentorComment
+			rc.EvaluatedAt = prev.EvaluatedAt
+			rc.EvaluatedBy = prev.EvaluatedBy
+			rc.EvaluatedByName = prev.EvaluatedByName
+		}
 		st.Companies[key] = rc
 		err := st.saveLocked()
 		st.mu.Unlock()
@@ -1582,6 +1589,69 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, rc)
+	})
+	mux.HandleFunc("/api/v1/mentor/companies/evaluate", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := st.require(w, r, "tutor", "mentor")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			CompanyID string `json:"company_id"`
+			Status    string `json:"status"`
+			Comment   string `json:"comment"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		in.CompanyID = strings.TrimSpace(in.CompanyID)
+		in.Status = strings.ToLower(strings.TrimSpace(in.Status))
+		in.Comment = strings.TrimSpace(in.Comment)
+		if in.CompanyID == "" {
+			apiErr(w, 400, "empresa não informada")
+			return
+		}
+		if in.Status != "aprovado" && in.Status != "reprovado" {
+			apiErr(w, 400, "classificação deve ser APROVADO ou REPROVADO")
+			return
+		}
+		if len([]rune(in.Comment)) > 4000 {
+			apiErr(w, 400, "comentário deve ter no máximo 4000 caracteres")
+			return
+		}
+		st.mu.Lock()
+		company, exists := st.Companies[in.CompanyID]
+		if !exists {
+			st.mu.Unlock()
+			apiErr(w, 404, "empresa não encontrada")
+			return
+		}
+		cl, classExists := st.Classes[company.ClassID]
+		if !classExists || cl.TutorID != u.ID {
+			st.mu.Unlock()
+			apiErr(w, 403, "esta empresa não pertence a uma turma deste Mentor")
+			return
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		company.ApprovalStatus = in.Status
+		company.MentorComment = in.Comment
+		company.EvaluatedAt = now
+		company.EvaluatedBy = u.ID
+		company.EvaluatedByName = u.Name
+		company.Revision++
+		company.UpdatedAt = now
+		st.Companies[in.CompanyID] = company
+		err := st.saveLocked()
+		st.mu.Unlock()
+		if err != nil {
+			apiErr(w, 500, "erro ao salvar avaliação")
+			return
+		}
+		writeJSON(w, 200, company)
 	})
 	mux.HandleFunc("/api/v1/classes/", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := st.require(w, r, "tutor", "mentor")

@@ -163,3 +163,11 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - adiciona rota dedicada `/primeiro-acesso`;
 - adiciona atalhos equivalentes na tela de login;
 - não altera o servidor.
+
+## W7.2 — avaliação pedagógica e simplificação do Administrador
+
+- Mentor classifica empreendimentos de suas turmas como `APROVADO` ou `REPROVADO`.
+- Parecer textual opcional de até 4.000 caracteres, com autoria e data da avaliação.
+- Aluno visualiza a avaliação e o parecer na área `MINHA EMPRESA`.
+- A avaliação fica persistida no servidor e não é apagada por sincronizações posteriores do Aluno.
+- O Administrador deixa de exibir na barra lateral os atalhos redundantes `VISÃO GERAL`, `USUÁRIOS` e `IMPORTAR CSV`.

@@ -199,7 +199,7 @@ func TestAccountCreatedEmailUsesTemporaryPassword(t *testing.T) {
 		t.Fatalf("status de e-mail esperado sent; recebido %q", student.EmailStatus)
 	}
 	msg := fake.waitMessage(t)
-	if !strings.Contains(msg, "acbd1234") {
+	if !strings.Contains(msg, "abcd1234") {
 		t.Fatalf("senha temporária não encontrada no e-mail:\n%s", msg)
 	}
 	if !strings.Contains(msg, "primeiro acesso") && !strings.Contains(msg, "primeiro=20acesso") {

@@ -37,6 +37,8 @@ type serverState struct {
 	Invitations       map[string]serverInvitation       `json:"invitations"`
 	MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
 	NextClassNumber   int                               `json:"next_class_number"`
+	Notifications     map[string]OnlineNotification     `json:"notifications,omitempty"`
+	AuditEvents       []OnlineAuditEvent                `json:"audit_events,omitempty"`
 	Sessions          map[string]serverSession          `json:"-"`
 }
 
@@ -49,7 +51,10 @@ type loginAttempt struct {
 	When time.Time
 }
 
-const defaultProvisionedPassword = "acbd1234"
+const defaultProvisionedPassword = "abcd1234"
+
+// Preserve the original password for accounts provisioned before OX-78-2.
+const legacyProvisionedPassword = "acbd1234"
 
 var loginGuard = struct {
 	sync.Mutex
@@ -124,6 +129,7 @@ func newServerState(root string) *serverState {
 		Invitations:       map[string]serverInvitation{},
 		MentorInvitations: map[string]serverMentorInvitation{},
 		NextClassNumber:   1,
+		Notifications:     map[string]OnlineNotification{},
 		Sessions:          map[string]serverSession{},
 	}
 }
@@ -147,6 +153,8 @@ func (st *serverState) load() error {
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
 		NextClassNumber   int                               `json:"next_class_number"`
+		Notifications     map[string]OnlineNotification     `json:"notifications,omitempty"`
+		AuditEvents       []OnlineAuditEvent                `json:"audit_events,omitempty"`
 	}
 	if err := json.Unmarshal(b, &disk); err != nil {
 		return err
@@ -169,6 +177,10 @@ func (st *serverState) load() error {
 	if disk.MentorInvitations != nil {
 		st.MentorInvitations = disk.MentorInvitations
 	}
+	if disk.Notifications != nil {
+		st.Notifications = disk.Notifications
+	}
+	st.AuditEvents = disk.AuditEvents
 	if disk.NextClassNumber > 0 {
 		st.NextClassNumber = disk.NextClassNumber
 	}
@@ -344,7 +356,9 @@ func (st *serverState) saveLocked() error {
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
 		NextClassNumber   int                               `json:"next_class_number"`
-	}{st.Users, st.Classes, st.Companies, st.Scenarios, st.Invitations, st.MentorInvitations, st.NextClassNumber}
+		Notifications     map[string]OnlineNotification     `json:"notifications,omitempty"`
+		AuditEvents       []OnlineAuditEvent                `json:"audit_events,omitempty"`
+	}{st.Users, st.Classes, st.Companies, st.Scenarios, st.Invitations, st.MentorInvitations, st.NextClassNumber, st.Notifications, st.AuditEvents}
 
 	b, err := json.MarshalIndent(disk, "", "  ")
 	if err != nil {
@@ -487,10 +501,13 @@ func (st *serverState) createProvisionedUserForClass(actor OnlineUser, name, ema
 	}
 	if classID != "" {
 		st.mu.RLock()
-		_, exists := st.Classes[classID]
+		cl, exists := st.Classes[classID]
 		st.mu.RUnlock()
 		if !exists {
 			return OnlineUser{}, errors.New("turma não encontrada")
+		}
+		if cl.TutorID == "" {
+			return OnlineUser{}, errors.New("designe um Mentor antes de matricular alunos nesta turma")
 		}
 	}
 	u, err := st.createUserProfile(name, email, defaultProvisionedPassword, role, institution, institutionalID)
@@ -558,6 +575,16 @@ func (st *serverState) enrollStudentLocked(userID, classID, when string) (Online
 	if rec.CurrentClassID == classID && classID != "" {
 		return rec.OnlineUser, nil
 	}
+	// Check the destination before altering the student's previous enrollment.
+	if classID != "" {
+		cl, ok := st.Classes[classID]
+		if !ok {
+			return OnlineUser{}, errors.New("turma não encontrada")
+		}
+		if cl.TutorID == "" {
+			return OnlineUser{}, errors.New("designe um Mentor antes de matricular alunos nesta turma")
+		}
+	}
 
 	if rec.CurrentClassID != "" {
 		if oldClass, ok := st.Classes[rec.CurrentClassID]; ok {
@@ -608,13 +635,57 @@ func (st *serverState) assignStudentClass(actor OnlineUser, userID, classID stri
 	if actor.Role != "admin" || !activeStatus(actor.Status) {
 		return OnlineUser{}, errors.New("somente administradores podem alterar matrículas")
 	}
+	userID, classID = strings.TrimSpace(userID), strings.TrimSpace(classID)
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	u, err := st.enrollStudentLocked(strings.TrimSpace(userID), strings.TrimSpace(classID), time.Now().UTC().Format(time.RFC3339))
+	previous, exists := st.Users[userID]
+	if !exists {
+		return OnlineUser{}, errors.New("aluno não encontrado")
+	}
+	// Validate destination before mutating the old enrollment.
+	if classID != "" {
+		if _, ok := st.Classes[classID]; !ok {
+			return OnlineUser{}, errors.New("turma não encontrada")
+		}
+	}
+	// Preserve previous values to restore RAM on a failed disk write.
+	oldEnrollment := append([]OnlineEnrollment(nil), previous.Enrollments...)
+	oldUser := previous
+	oldUser.Enrollments = oldEnrollment
+	oldClasses := map[string]OnlineClass{}
+	for _, id := range []string{previous.CurrentClassID, classID} {
+		if cl, ok := st.Classes[id]; ok {
+			cl.StudentIDs = append([]string(nil), cl.StudentIDs...)
+			oldClasses[id] = cl
+		}
+	}
+	u, err := st.enrollStudentLocked(userID, classID, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return OnlineUser{}, err
 	}
+	var noticeID string
+	auditLen := len(st.AuditEvents)
+	if previous.CurrentClassID != "" && previous.CurrentClassID != classID && classID != "" {
+		now := time.Now().UTC().Format(time.RFC3339)
+		notice := OnlineNotification{ID: "nt-" + randomHex(12), RecipientID: userID,
+			Type: "class_transfer", ResourceType: "class", ResourceID: classID,
+			Message: "Sua matrícula foi transferida para outra turma. Consulte seus dados de matrícula.", CreatedAt: now}
+		if st.Notifications == nil {
+			st.Notifications = map[string]OnlineNotification{}
+		}
+		st.Notifications[notice.ID] = notice
+		noticeID = notice.ID
+		st.AuditEvents = append(st.AuditEvents, OnlineAuditEvent{ID: "au-" + randomHex(10), ActorID: actor.ID, Action: "student_transferred", ResourceID: userID, CreatedAt: now})
+	}
 	if err := st.saveLocked(); err != nil {
+		st.Users[userID] = oldUser
+		for id, cl := range oldClasses {
+			st.Classes[id] = cl
+		}
+		if noticeID != "" {
+			delete(st.Notifications, noticeID)
+		}
+		st.AuditEvents = st.AuditEvents[:auditLen]
 		return OnlineUser{}, err
 	}
 	return u, nil
@@ -657,9 +728,12 @@ func (st *serverState) createAdminClass(actor OnlineUser, name, mentorID string)
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	mentor, ok := st.Users[mentorID]
-	if !ok || !isMentorRole(mentor.Role) || !activeStatus(mentor.Status) {
-		return OnlineClass{}, errors.New("Mentor responsável inválido ou inativo")
+	// The Administrator may create a class before a Mentor is registered.
+	if mentorID != "" {
+		mentor, ok := st.Users[mentorID]
+		if !ok || !isMentorRole(mentor.Role) || !activeStatus(mentor.Status) {
+			return OnlineClass{}, errors.New("Mentor responsável inválido ou inativo")
+		}
 	}
 	for _, existing := range st.Classes {
 		if strings.EqualFold(strings.TrimSpace(existing.Name), name) {
@@ -678,6 +752,43 @@ func (st *serverState) createAdminClass(actor OnlineUser, name, mentorID string)
 	}
 	st.Classes[cl.ID] = cl
 	if err := st.saveLocked(); err != nil {
+		// Avoid phantom classes and spent numbers when persistence fails.
+		delete(st.Classes, cl.ID)
+		st.NextClassNumber = number
+		return OnlineClass{}, err
+	}
+	return cl, nil
+}
+
+// assignAdminClassMentor completes the setup of an unassigned class.
+// Reassignment of an established class is intentionally not supported here:
+// it would also require migration of invitations, scenarios and ownership.
+func (st *serverState) assignAdminClassMentor(actor OnlineUser, classID, mentorID string) (OnlineClass, error) {
+	if actor.Role != "admin" || !activeStatus(actor.Status) {
+		return OnlineClass{}, errors.New("somente administradores podem designar Mentores")
+	}
+	classID, mentorID = strings.TrimSpace(classID), strings.TrimSpace(mentorID)
+	if classID == "" || mentorID == "" {
+		return OnlineClass{}, errors.New("informe a turma e o Mentor responsável")
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	cl, ok := st.Classes[classID]
+	if !ok {
+		return OnlineClass{}, errors.New("turma não encontrada")
+	}
+	if cl.TutorID != "" {
+		return OnlineClass{}, errors.New("esta turma já possui um Mentor responsável")
+	}
+	mentor, ok := st.Users[mentorID]
+	if !ok || !isMentorRole(mentor.Role) || !activeStatus(mentor.Status) {
+		return OnlineClass{}, errors.New("Mentor responsável inválido ou inativo")
+	}
+	cl.TutorID = mentorID
+	st.Classes[classID] = cl
+	if err := st.saveLocked(); err != nil {
+		cl.TutorID = ""
+		st.Classes[classID] = cl
 		return OnlineClass{}, err
 	}
 	return cl, nil
@@ -1483,6 +1594,31 @@ func (st *serverState) handler() http.Handler {
 		}
 	})
 
+	mux.HandleFunc("/api/v1/admin/classes/assign-mentor", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != http.MethodPost {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			ClassID  string `json:"class_id"`
+			MentorID string `json:"mentor_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		cl, err := st.assignAdminClassMentor(actor, in.ClassID, in.MentorID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, cl)
+	})
+
 	mux.HandleFunc("/api/v1/admin/students/assign-class", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := st.require(w, r, "admin")
 		if !ok {
@@ -1715,7 +1851,14 @@ func (st *serverState) handler() http.Handler {
 			apiErr(w, 400, "a senha temporária já foi substituída; não é possível reenviar essa credencial")
 			return
 		}
-		writeJSON(w, 200, st.deliverAccountCreatedEmail(rec.OnlineUser, defaultProvisionedPassword))
+		tempPassword := defaultProvisionedPassword
+		if hmac.Equal([]byte(passwordHash(legacyProvisionedPassword, rec.Salt)), []byte(rec.Hash)) {
+			tempPassword = legacyProvisionedPassword
+		} else if !hmac.Equal([]byte(passwordHash(defaultProvisionedPassword, rec.Salt)), []byte(rec.Hash)) {
+			apiErr(w, 409, "a senha desta conta não corresponde a uma senha inicial conhecida; solicite uma redefinição segura")
+			return
+		}
+		writeJSON(w, 200, st.deliverAccountCreatedEmail(rec.OnlineUser, tempPassword))
 	})
 
 	mux.HandleFunc("/api/v1/admin/email-status", func(w http.ResponseWriter, r *http.Request) {
@@ -1823,6 +1966,10 @@ func (st *serverState) handler() http.Handler {
 			apiErr(w, 400, "JSON inválido")
 			return
 		}
+		if in.New == defaultProvisionedPassword || in.New == legacyProvisionedPassword {
+			apiErr(w, 400, "escolha uma senha diferente da senha temporária")
+			return
+		}
 		if !validPassword(in.New) {
 			apiErr(w, 400, "a nova senha deve ter pelo menos 8 caracteres")
 			return
@@ -1885,6 +2032,67 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, inv)
+	})
+
+	mux.HandleFunc("/api/v1/notifications", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := st.requireSession(w, r)
+		if !ok {
+			return
+		}
+		if r.Method != http.MethodGet {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		st.mu.RLock()
+		out := make([]OnlineNotification, 0)
+		for _, n := range st.Notifications {
+			if n.RecipientID == u.ID {
+				out = append(out, n)
+			}
+		}
+		st.mu.RUnlock()
+		sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+		writeJSON(w, 200, out)
+	})
+	mux.HandleFunc("/api/v1/notifications/", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := st.requireSession(w, r)
+		if !ok {
+			return
+		}
+		if r.Method != http.MethodPost {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		suffix := strings.TrimPrefix(r.URL.Path, "/api/v1/notifications/")
+		if !strings.HasSuffix(suffix, "/read") {
+			apiErr(w, 404, "operação não encontrada")
+			return
+		}
+		id := strings.TrimSuffix(suffix, "/read")
+		if id == "" || strings.Contains(id, "/") {
+			apiErr(w, 400, "ID inválido")
+			return
+		}
+		st.mu.Lock()
+		n, exists := st.Notifications[id]
+		if !exists || n.RecipientID != u.ID {
+			st.mu.Unlock()
+			apiErr(w, 404, "notificação não encontrada")
+			return
+		}
+		if n.ReadAt == "" {
+			old := n
+			n.ReadAt = time.Now().UTC().Format(time.RFC3339)
+			st.Notifications[id] = n
+			if err := st.saveLocked(); err != nil {
+				st.Notifications[id] = old
+				st.mu.Unlock()
+				apiErr(w, 500, "erro ao salvar notificação")
+				return
+			}
+		}
+		st.mu.Unlock()
+		writeJSON(w, 200, n)
 	})
 
 	mux.HandleFunc("/api/v1/mentor/students", func(w http.ResponseWriter, r *http.Request) {
@@ -2072,13 +2280,36 @@ func (st *serverState) handler() http.Handler {
 		if !ok {
 			return
 		}
-		if r.Method != "PUT" {
+		if r.Method != http.MethodPut && r.Method != http.MethodDelete {
 			apiErr(w, 405, "método não permitido")
 			return
 		}
 		localID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/v1/companies/"))
 		if localID == "" || strings.Contains(localID, "/") {
 			apiErr(w, 400, "ID inválido")
+			return
+		}
+		if r.Method == http.MethodDelete {
+			key := u.ID + ":" + localID
+			st.mu.Lock()
+			old, exists := st.Companies[key]
+			if !exists || old.OwnerID != u.ID {
+				st.mu.Unlock()
+				apiErr(w, http.StatusNotFound, "empreendimento não encontrado")
+				return
+			}
+			delete(st.Companies, key)
+			originalAuditLen := len(st.AuditEvents)
+			st.AuditEvents = append(st.AuditEvents, OnlineAuditEvent{ID: "au-" + randomHex(10), ActorID: u.ID, Action: "company_deleted", ResourceID: key, CreatedAt: time.Now().UTC().Format(time.RFC3339)})
+			if err := st.saveLocked(); err != nil {
+				st.AuditEvents = st.AuditEvents[:originalAuditLen]
+				st.Companies[key] = old // rollback in-memory when disk save fails
+				st.mu.Unlock()
+				apiErr(w, 500, "erro ao persistir exclusão")
+				return
+			}
+			st.mu.Unlock()
+			writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "company_id": key})
 			return
 		}
 		var in struct {
@@ -2119,7 +2350,11 @@ func (st *serverState) handler() http.Handler {
 			rc.EvaluatedAt = prev.EvaluatedAt
 			rc.EvaluatedBy = prev.EvaluatedBy
 			rc.EvaluatedByName = prev.EvaluatedByName
+			rc.ApprovalWithReservations = prev.ApprovalWithReservations
+			rc.EvaluationHistory = prev.EvaluationHistory
+			rc.ReviewedCompanyRevision = prev.ReviewedCompanyRevision
 		}
+		rc.LastStudentUpdate = now
 		st.Companies[key] = rc
 		err := st.saveLocked()
 		st.mu.Unlock()
@@ -2139,9 +2374,11 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		var in struct {
-			CompanyID string `json:"company_id"`
-			Status    string `json:"status"`
-			Comment   string `json:"comment"`
+			CompanyID        string `json:"company_id"`
+			Status           string `json:"status"`
+			Comment          string `json:"comment"`
+			WithReservations bool   `json:"com_ressalvas"`
+			RequestID        string `json:"request_id"`
 		}
 		if readJSON(r, &in) != nil {
 			apiErr(w, 400, "JSON inválido")
@@ -2156,6 +2393,18 @@ func (st *serverState) handler() http.Handler {
 		}
 		if in.Status != "aprovado" && in.Status != "reprovado" {
 			apiErr(w, 400, "classificação deve ser APROVADO ou REPROVADO")
+			return
+		}
+		if in.WithReservations && in.Status != "aprovado" {
+			apiErr(w, 400, "ressalvas só são permitidas em aprovações")
+			return
+		}
+		if (in.WithReservations || in.Status == "reprovado") && in.Comment == "" {
+			apiErr(w, 400, "comentário obrigatório nesta classificação")
+			return
+		}
+		if len(in.RequestID) > 128 {
+			apiErr(w, 400, "identificador da solicitação muito longo")
 			return
 		}
 		if len([]rune(in.Comment)) > 4000 {
@@ -2175,16 +2424,46 @@ func (st *serverState) handler() http.Handler {
 			apiErr(w, 403, "esta empresa não pertence a uma turma deste Mentor")
 			return
 		}
+		for _, prior := range company.EvaluationHistory {
+			if in.RequestID != "" && prior.RequestID == in.RequestID && prior.MentorID == u.ID {
+				st.mu.Unlock()
+				writeJSON(w, 200, company) // request retry; no second notification or review
+				return
+			}
+		}
 		now := time.Now().UTC().Format(time.RFC3339)
+		original := company
 		company.ApprovalStatus = in.Status
 		company.MentorComment = in.Comment
+		company.ApprovalWithReservations = in.WithReservations
 		company.EvaluatedAt = now
 		company.EvaluatedBy = u.ID
 		company.EvaluatedByName = u.Name
 		company.Revision++
-		company.UpdatedAt = now
+		// Approval does not count as new student activity.
+		company.ReviewedCompanyRevision = company.Revision
+		revision := OnlineEvaluation{
+			ID: "ev-" + randomHex(12), RequestID: in.RequestID, MentorID: u.ID,
+			MentorName: u.Name, Status: in.Status, WithReservations: in.WithReservations,
+			Comment: in.Comment, PublishedAt: now, CompanyRevision: company.ReviewedCompanyRevision,
+		}
+		company.EvaluationHistory = append(company.EvaluationHistory, revision)
 		st.Companies[in.CompanyID] = company
+		notice := OnlineNotification{ID: "nt-" + randomHex(12), RecipientID: company.OwnerID,
+			Type: "evaluation_published", ResourceType: "company", ResourceID: company.ID,
+			Message: "Um novo parecer do mentor foi publicado para seu empreendimento.", CreatedAt: now}
+		if st.Notifications == nil {
+			st.Notifications = map[string]OnlineNotification{}
+		}
+		st.Notifications[notice.ID] = notice
+		originalAuditLen := len(st.AuditEvents)
+		st.AuditEvents = append(st.AuditEvents, OnlineAuditEvent{ID: "au-" + randomHex(10), ActorID: u.ID, Action: "evaluation_published", ResourceID: company.ID, CreatedAt: now})
 		err := st.saveLocked()
+		if err != nil {
+			st.Companies[in.CompanyID] = original
+			delete(st.Notifications, notice.ID)
+			st.AuditEvents = st.AuditEvents[:originalAuditLen]
+		}
 		st.mu.Unlock()
 		if err != nil {
 			apiErr(w, 500, "erro ao salvar avaliação")

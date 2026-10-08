@@ -96,7 +96,7 @@ func loadServerEmailConfig() (serverEmailConfig, bool, error) {
 		cfg.Security = "starttls"
 	}
 	if cfg.FromName == "" {
-		cfg.FromName = "JED Simulador"
+		cfg.FromName = jedEmailBrand()
 	}
 	if cfg.FromEmail == "" && strings.Contains(cfg.Username, "@") {
 		cfg.FromEmail = cfg.Username
@@ -126,7 +126,7 @@ func saveServerEmailConfig(cfg serverEmailConfig) error {
 		cfg.Port = 587
 	}
 	if cfg.FromName == "" {
-		cfg.FromName = "JED Simulador"
+		cfg.FromName = jedEmailBrand()
 	}
 	if cfg.Security == "" {
 		cfg.Security = "starttls"
@@ -262,6 +262,17 @@ func accountRoleLabel(role string) string {
 	}
 }
 
+// jedEmailBrand customiza apenas os e-mails transacionais, sem alterar
+// identificadores internos, APIs ou a compatibilidade com clientes legados.
+// Na ausencia da variavel, mantem a marca historica para nao surpreender
+// instalacoes ainda operando como JED Simulador.
+func jedEmailBrand() string {
+	if v := strings.TrimSpace(os.Getenv("JED_EMAIL_BRAND")); v != "" {
+		return v
+	}
+	return "JED Simulador"
+}
+
 func jedPublicURL() string {
 	if v := strings.TrimSpace(os.Getenv("JED_PUBLIC_URL")); v != "" {
 		return strings.TrimRight(v, "/")
@@ -296,10 +307,11 @@ func accountCreatedEmail(u OnlineUser, temporaryPassword string) (string, string
 			enrollment = "Turma: aguardando vinculação pelo Administrador\n"
 		}
 	}
-	subject := "Seu cadastro no JED Simulador"
+	brand := jedEmailBrand()
+	subject := fmt.Sprintf("Seu cadastro no %s", brand)
 	body := fmt.Sprintf(`Olá, %s.
 
-Seu cadastro no JED Simulador foi realizado por um Administrador.
+Seu cadastro no %s foi realizado por um Administrador.
 
 Perfil: %s
 E-mail de acesso: %s
@@ -311,8 +323,8 @@ No primeiro acesso, a plataforma exigirá a substituição da senha temporária 
 
 Não compartilhe sua senha. Se você não esperava este cadastro, entre em contato com a administração da sua instituição.
 
-JED Simulador
-`, name, role, u.Email, temporaryPassword, enrollment, jedPublicURL())
+%s
+`, name, brand, role, u.Email, temporaryPassword, enrollment, jedPublicURL(), brand)
 	return subject, body
 }
 
@@ -366,22 +378,23 @@ func emailConfigurationStatus() map[string]any {
 }
 
 func mentorCredentialEmail(inv serverMentorInvitation) (string, string) {
-	subject := "Convite para acessar o JED Simulador como Mentor"
+	brand := jedEmailBrand()
+	subject := fmt.Sprintf("Convite para acessar o %s como Mentor", brand)
 	name := strings.TrimSpace(inv.Name)
 	if name == "" {
 		name = "Mentor"
 	}
 	body := fmt.Sprintf(`Olá, %s.
 
-Você recebeu uma credencial para criar uma conta de Mentor no JED Simulador.
+Você recebeu uma credencial para criar uma conta de Mentor no %s.
 
 Código de credenciamento: %s
 Validade: 30 dias
 Uso: individual e único
 
 Para ativar:
-1. Abra o JED Simulador.
-2. Acesse JED Online.
+1. Abra o %s.
+2. Acesse a plataforma.
 3. Escolha CADASTRAR MENTOR.
 4. Informe o mesmo endereço de e-mail que recebeu esta mensagem.
 5. Informe o código de credenciamento acima e crie sua senha.
@@ -390,8 +403,8 @@ Instituição: %s
 
 Se você não esperava este convite, não utilize o código.
 
-JED Simulador
-`, name, inv.Code, displayInstitution(inv.Institution))
+%s
+`, name, brand, inv.Code, brand, displayInstitution(inv.Institution), brand)
 	return subject, body
 }
 

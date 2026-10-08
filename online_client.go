@@ -84,18 +84,53 @@ type OnlineScenario struct {
 	CreatedAt string  `json:"created_at,omitempty"`
 }
 
+type OnlineEvaluation struct {
+	ID               string `json:"evaluation_id"`
+	RequestID        string `json:"request_id,omitempty"`
+	MentorID         string `json:"mentor_id"`
+	MentorName       string `json:"mentor_name"`
+	Status           string `json:"status"`
+	WithReservations bool   `json:"com_ressalvas,omitempty"`
+	Comment          string `json:"comment,omitempty"`
+	PublishedAt      string `json:"published_at"`
+	CompanyRevision  int    `json:"company_revision_at_review"`
+}
+
+type OnlineNotification struct {
+	ID           string `json:"notification_id"`
+	RecipientID  string `json:"recipient_user_id"`
+	Type         string `json:"type"`
+	ResourceType string `json:"resource_type"`
+	ResourceID   string `json:"resource_id"`
+	Message      string `json:"message"`
+	CreatedAt    string `json:"created_at"`
+	ReadAt       string `json:"read_at,omitempty"`
+}
+
+type OnlineAuditEvent struct {
+	ID         string `json:"event_id"`
+	ActorID    string `json:"actor_id"`
+	Action     string `json:"action"`
+	ResourceID string `json:"resource_id"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type RemoteCompany struct {
-	ID              string  `json:"id"`
-	OwnerID         string  `json:"owner_id"`
-	ClassID         string  `json:"class_id,omitempty"`
-	Revision        int     `json:"revision"`
-	UpdatedAt       string  `json:"updated_at"`
-	ApprovalStatus  string  `json:"approval_status,omitempty"` // aprovado | reprovado
-	MentorComment   string  `json:"mentor_comment,omitempty"`
-	EvaluatedAt     string  `json:"evaluated_at,omitempty"`
-	EvaluatedBy     string  `json:"evaluated_by,omitempty"`
-	EvaluatedByName string  `json:"evaluated_by_name,omitempty"`
-	Company         Empresa `json:"company"`
+	ID                       string             `json:"id"`
+	OwnerID                  string             `json:"owner_id"`
+	ClassID                  string             `json:"class_id,omitempty"`
+	Revision                 int                `json:"revision"`
+	UpdatedAt                string             `json:"updated_at"`
+	ApprovalStatus           string             `json:"approval_status,omitempty"`
+	ApprovalWithReservations bool               `json:"approval_with_reservations,omitempty"`
+	EvaluationHistory        []OnlineEvaluation `json:"evaluation_history,omitempty"`
+	ReviewedCompanyRevision  int                `json:"reviewed_company_revision,omitempty"`
+	LastStudentUpdate        string             `json:"last_student_update,omitempty"` // aprovado | reprovado
+	MentorComment            string             `json:"mentor_comment,omitempty"`
+	EvaluatedAt              string             `json:"evaluated_at,omitempty"`
+	EvaluatedBy              string             `json:"evaluated_by,omitempty"`
+	EvaluatedByName          string             `json:"evaluated_by_name,omitempty"`
+	Company                  Empresa            `json:"company"`
 }
 
 type APIError struct {

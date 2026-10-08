@@ -958,6 +958,137 @@ func (st *serverState) setUserStatus(actor OnlineUser, userID, status string) (O
 	return rec.OnlineUser, nil
 }
 
+func (st *serverState) deleteUserAsPrimary(actor OnlineUser, userID string) (OnlineUser, error) {
+	if actor.Role != "admin" || !actor.IsPrimaryAdmin {
+		return OnlineUser{}, errors.New("somente o administrador principal pode excluir contas")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return OnlineUser{}, errors.New("usuário não informado")
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	rec, ok := st.Users[userID]
+	if !ok {
+		return OnlineUser{}, errors.New("usuário não encontrado")
+	}
+	if rec.ID == actor.ID || rec.IsPrimaryAdmin {
+		return OnlineUser{}, errors.New("o administrador principal não pode excluir a própria conta")
+	}
+	if isMentorRole(rec.Role) {
+		owned := 0
+		for _, cl := range st.Classes {
+			if cl.TutorID == rec.ID {
+				owned++
+			}
+		}
+		if owned > 0 {
+			return OnlineUser{}, fmt.Errorf("este Mentor possui %d turma(s); exclua as turmas antes de excluir a conta", owned)
+		}
+	}
+
+	for id, cl := range st.Classes {
+		if containsStudentID(cl.StudentIDs, rec.ID) {
+			cl.StudentIDs = removeStudentID(cl.StudentIDs, rec.ID)
+			st.Classes[id] = cl
+		}
+	}
+	for id, company := range st.Companies {
+		if company.OwnerID == rec.ID {
+			delete(st.Companies, id)
+		}
+	}
+	for id, scenario := range st.Scenarios {
+		if scenario.TutorID == rec.ID {
+			delete(st.Scenarios, id)
+		}
+	}
+	for code, inv := range st.Invitations {
+		if inv.UserID == rec.ID || inv.TutorID == rec.ID || strings.EqualFold(inv.Email, rec.Email) {
+			delete(st.Invitations, code)
+		}
+	}
+	for code, inv := range st.MentorInvitations {
+		if inv.UserID == rec.ID || inv.IssuerID == rec.ID || strings.EqualFold(inv.Email, rec.Email) {
+			delete(st.MentorInvitations, code)
+		}
+	}
+	for token, session := range st.Sessions {
+		if session.UserID == rec.ID {
+			delete(st.Sessions, token)
+		}
+	}
+	delete(st.Users, rec.ID)
+	if err := st.saveLocked(); err != nil {
+		return OnlineUser{}, err
+	}
+	return rec.OnlineUser, nil
+}
+
+func (st *serverState) deleteClassAsPrimary(actor OnlineUser, classID string) (OnlineClass, int, error) {
+	if actor.Role != "admin" || !actor.IsPrimaryAdmin {
+		return OnlineClass{}, 0, errors.New("somente o administrador principal pode excluir turmas")
+	}
+	classID = strings.TrimSpace(classID)
+	if classID == "" {
+		return OnlineClass{}, 0, errors.New("turma não informada")
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	cl, ok := st.Classes[classID]
+	if !ok {
+		return OnlineClass{}, 0, errors.New("turma não encontrada")
+	}
+	delete(st.Classes, classID)
+	for code, inv := range st.Invitations {
+		if inv.ClassID == classID {
+			delete(st.Invitations, code)
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for id, rec := range st.Users {
+		if rec.Role != "aluno" {
+			continue
+		}
+		changed := false
+		for i := range rec.Enrollments {
+			if rec.Enrollments[i].ClassID == classID && rec.Enrollments[i].EndedAt == "" {
+				rec.Enrollments[i].EndedAt = now
+				changed = true
+			}
+		}
+		if rec.CurrentClassID == classID {
+			rec.CurrentClassID = ""
+			rec.EnrollmentID = ""
+			rec.EnrollmentStatus = "waiting"
+			changed = true
+		}
+		if changed {
+			st.Users[id] = rec
+		}
+	}
+
+	detached := 0
+	for id, company := range st.Companies {
+		if company.ClassID != classID {
+			continue
+		}
+		company.ClassID = ""
+		company.Company.TurmaID = ""
+		company.Revision++
+		company.UpdatedAt = now
+		st.Companies[id] = company
+		detached++
+	}
+	if err := st.saveLocked(); err != nil {
+		return OnlineClass{}, 0, err
+	}
+	return cl, detached, nil
+}
+
 func (st *serverState) setMentorPermission(actor OnlineUser, userID string, allowed bool) (OnlineUser, error) {
 	if actor.Role != "admin" {
 		return OnlineUser{}, errors.New("somente administradores podem alterar permissões de mentor")
@@ -1375,6 +1506,54 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, u)
+	})
+
+	mux.HandleFunc("/api/v1/admin/users/delete", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			UserID string `json:"user_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		deleted, err := st.deleteUserAsPrimary(actor, in.UserID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": deleted})
+	})
+
+	mux.HandleFunc("/api/v1/admin/classes/delete", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			ClassID string `json:"class_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		deleted, detached, err := st.deleteClassAsPrimary(actor, in.ClassID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": deleted, "detached_companies": detached})
 	})
 
 	mux.HandleFunc("/api/v1/admin/users", func(w http.ResponseWriter, r *http.Request) {
@@ -1833,6 +2012,10 @@ func (st *serverState) handler() http.Handler {
 			st.mu.RLock()
 			out := []OnlineClass{}
 			for _, c := range st.Classes {
+				if u.Role == "admin" {
+					out = append(out, c)
+					continue
+				}
 				if isMentorRole(u.Role) && c.TutorID == u.ID {
 					out = append(out, c)
 				}

@@ -185,3 +185,12 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - Ingresso do Aluno por código foi desativado.
 - Mentor deixa de criar turmas, mas pode alterar o cenário de suas turmas.
 - Novos empreendimentos herdam o vínculo administrativo atual; empreendimentos já vinculados preservam a turma histórica em transferências.
+
+## W7.3.1 — correção de integração
+
+- corrige regressão entre exclusão administrativa e gestão centralizada de turmas;
+- restaura `deleteUserAsPrimary` e `deleteClassAsPrimary`;
+- restaura endpoints Web de exclusão do Administrador Principal;
+- exclusão de turma encerra a matrícula ativa e move o Aluno para `AGUARDANDO TURMA`;
+- mantém IDs automáticos `T{turma}A{sequência}`;
+- preserva filtros de avaliação do Mentor e ações destrutivas com confirmação `EXCLUIR`.

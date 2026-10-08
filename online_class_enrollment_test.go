@@ -148,3 +148,37 @@ func TestLegacyJoinAndMentorClassCreationAreDisabled(t *testing.T) {
 		t.Fatalf("Aluno não deve entrar por código; HTTP %d", code)
 	}
 }
+
+func TestDeleteCentralizedClassMovesStudentToWaitingAndClosesEnrollment(t *testing.T) {
+	st := newServerState(t.TempDir())
+	admin, err := st.createInitialAdmin("Admin", "admin-delete-class@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mentor, err := st.createUser("Mentor", "mentor-delete-class@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl, err := st.createAdminClass(admin, "Turma a excluir", mentor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createProvisionedUserForClass(admin, "Aluno", "aluno-delete-class@example.com", "aluno", "Escola", "", cl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if student.EnrollmentID != "T1A1" {
+		t.Fatalf("matrícula inesperada antes da exclusão: %s", student.EnrollmentID)
+	}
+
+	if _, _, err := st.deleteClassAsPrimary(admin, cl.ID); err != nil {
+		t.Fatal(err)
+	}
+	rec := st.Users[student.ID]
+	if rec.CurrentClassID != "" || rec.EnrollmentID != "" || rec.EnrollmentStatus != "waiting" {
+		t.Fatalf("Aluno deveria ficar aguardando turma: %#v", rec.OnlineUser)
+	}
+	if len(rec.Enrollments) != 1 || rec.Enrollments[0].EndedAt == "" {
+		t.Fatalf("histórico da matrícula deveria ser encerrado: %#v", rec.Enrollments)
+	}
+}

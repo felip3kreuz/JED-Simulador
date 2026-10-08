@@ -83,6 +83,8 @@ export default function AdminWorkspace({ user }) {
   const [form, setForm] = useState({ role: "aluno", name: "", email: "", institution: "", institutional_id: "", class_id: "" });
   const [classForm, setClassForm] = useState({ name: "", mentor_id: "" });
   const [assignment, setAssignment] = useState({ user_id: "", student_name: "", class_id: "" });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   async function load() {
     setLoading(true); setError("");
@@ -214,6 +216,25 @@ export default function AdminWorkspace({ user }) {
     const a = document.createElement("a"); a.href = url; a.download = "modelo_usuarios_jed.csv"; a.click(); URL.revokeObjectURL(url);
   }
 
+  function mentorClassCount(account) {
+    return data.classes.filter((cl) => cl.tutor_id === account.id).length;
+  }
+
+  function requestDelete(target) {
+    setError(""); setNotice(""); setDeleteConfirm(""); setDeleteTarget(target); setDialog("delete");
+  }
+
+  async function confirmDelete(event) {
+    event.preventDefault();
+    if (!deleteTarget || deleteConfirm.trim().toUpperCase() !== "EXCLUIR") return;
+    const input = deleteTarget.type === "class"
+      ? { action: "delete_class", class_id: deleteTarget.id }
+      : { action: "delete_user", user_id: deleteTarget.id };
+    const label = deleteTarget.type === "class" ? `Turma ${deleteTarget.name} excluída.` : `${deleteTarget.name} excluído(a).`;
+    const result = await action(input, label);
+    if (result) { setDialog(""); setDeleteTarget(null); setDeleteConfirm(""); }
+  }
+
   if (loading) return <section className="workspace-loading">CARREGANDO USUÁRIOS, TURMAS E CONFIGURAÇÃO…</section>;
 
   return <>
@@ -238,14 +259,14 @@ export default function AdminWorkspace({ user }) {
 
     <section className="workspace-section orbit-section">
       <div className="workspace-section-head"><div><p className="eyebrow">TURMAS</p><h2>GESTÃO CENTRALIZADA</h2></div><span className="section-count">{data.classes.length} TURMA(S)</span></div>
-      <p className="section-help">O Administrador define o nome e o Mentor responsável. O número T é sequencial e permanente; cada Aluno recebe uma matrícula própria, como <strong>T25A4</strong>.</p>
-      <div className="table-wrap"><table className="workspace-table"><thead><tr><th>ID</th><th>Nome</th><th>Mentor</th><th>Alunos</th><th>Cenário</th></tr></thead><tbody>{data.classes.length ? data.classes.map((cl) => <tr key={cl.id}><td><strong>T{cl.number}</strong></td><td>{cl.name}</td><td>{mentorName(cl.tutor_id)}</td><td>{cl.student_ids?.length || 0}</td><td>{cl.scenario?.nome || "Mercado estável"}</td></tr>) : <tr><td colSpan="5" className="empty-cell">Nenhuma turma cadastrada. Cadastre primeiro um Mentor e depois crie a turma.</td></tr>}</tbody></table></div>
+      <p className="section-help">O Administrador define o nome e o Mentor responsável. O número T é sequencial e permanente; cada Aluno recebe uma matrícula própria, como <strong>T25A4</strong>. A exclusão definitiva de turmas é exclusiva do Administrador Principal.</p>
+      <div className="table-wrap"><table className="workspace-table"><thead><tr><th>ID</th><th>Nome</th><th>Mentor</th><th>Alunos</th><th>Cenário</th>{user.is_primary_admin ? <th>Ação</th> : null}</tr></thead><tbody>{data.classes.length ? data.classes.map((cl) => <tr key={cl.id}><td><strong>T{cl.number}</strong></td><td>{cl.name}</td><td>{mentorName(cl.tutor_id)}</td><td>{cl.student_ids?.length || 0}</td><td>{cl.scenario?.nome || "Mercado estável"}</td>{user.is_primary_admin ? <td><button className="table-action danger-action" disabled={Boolean(busy)} onClick={() => requestDelete({ type: "class", id: cl.id, name: `T${cl.number} · ${cl.name}`, detail: `${cl.student_ids?.length || 0} aluno(s) · Mentor: ${mentorName(cl.tutor_id)}` })}>EXCLUIR</button></td> : null}</tr>) : <tr><td colSpan={user.is_primary_admin ? 6 : 5} className="empty-cell">Nenhuma turma cadastrada. Cadastre primeiro um Mentor e depois crie a turma.</td></tr>}</tbody></table></div>
     </section>
 
     <section id="usuarios" className="workspace-section orbit-section">
       <div className="workspace-section-head"><div><p className="eyebrow">CONTAS</p><h2>USUÁRIOS DO SERVIDOR</h2></div><span className="section-count">{data.users.length} REGISTROS</span></div>
       <p className="section-help">Ao cadastrar um Aluno, a turma pode ser definida imediatamente. Alunos sem turma permanecem como <strong>AGUARDANDO TURMA</strong> até o Administrador vinculá-los.</p>
-      <div className="table-wrap"><table className="workspace-table"><thead><tr><th>Nome</th><th>Papel</th><th>E-mail</th><th>Turma / matrícula</th><th>Primeiro acesso</th><th>E-mail</th><th>Status</th></tr></thead><tbody>{data.users.map((account) => {
+      <div className="table-wrap"><table className="workspace-table"><thead><tr><th>Nome</th><th>Papel</th><th>E-mail</th><th>Turma / matrícula</th><th>Primeiro acesso</th><th>E-mail</th><th>Status</th>{user.is_primary_admin ? <th>Ação</th> : null}</tr></thead><tbody>{data.users.map((account) => {
         const active = account.status !== "disabled";
         const [mailLabel, mailClass] = emailState(account);
         const cl = account.role === "aluno" ? classByID(account.current_class_id) : null;
@@ -257,6 +278,7 @@ export default function AdminWorkspace({ user }) {
           <td>{account.must_change_password ? <span className="state-label active">TROCA PENDENTE</span> : <span className="state-label used">CONCLUÍDO</span>}</td>
           <td><span className={`state-label ${mailClass}`} title={account.email_error || ""}>{mailLabel}</span>{account.must_change_password && account.email_status !== "sent" ? <button className="table-action" disabled={Boolean(busy)} onClick={() => action({ action: "resend_email", user_id: account.id }, "E-mail de cadastro reenviado.")}>REENVIAR</button> : null}</td>
           <td><button className={`table-action ${active ? "state-active" : ""}`} disabled={Boolean(busy) || account.id === user.id} onClick={() => action({ action: "user_status", user_id: account.id, status: active ? "disabled" : "active" }, active ? "Conta desativada." : "Conta ativada.")}>{active ? "ATIVA" : "DESATIVADA"}</button></td>
+          {user.is_primary_admin ? <td>{account.id === user.id || account.is_primary_admin ? <span className="student-muted">PROTEGIDO</span> : (account.role === "mentor" || account.role === "tutor") && mentorClassCount(account) > 0 ? <button className="table-action danger-action" disabled title="Exclua primeiro as turmas deste Mentor">{mentorClassCount(account)} TURMA(S)</button> : <button className="table-action danger-action" disabled={Boolean(busy)} onClick={() => requestDelete({ type: "user", id: account.id, name: account.name, detail: `${roleName(account.role)} · ${account.email}` })}>EXCLUIR</button>}</td> : null}
         </tr>;
       })}</tbody></table></div>
     </section>
@@ -265,6 +287,14 @@ export default function AdminWorkspace({ user }) {
       <div className="workspace-section-head"><div><p className="eyebrow">IMPORTAÇÃO</p><h2>LISTA CSV</h2></div></div>
       <div className="workspace-card"><p className="section-help">Cabeçalhos: <code>nome,email,papel,instituicao,id_institucional,turma</code>. Para Alunos, <code>turma</code> aceita <code>T25</code>, <code>25</code> ou o nome exato da turma. Em branco significa AGUARDANDO TURMA.</p></div>
     </section>
+
+    <Modal open={dialog === "delete"} title="CONFIRMAR EXCLUSÃO" subtitle={deleteTarget?.name || "Registro selecionado"} onClose={() => { setDialog(""); setDeleteTarget(null); setDeleteConfirm(""); }}>
+      <form className="orbit-form" onSubmit={confirmDelete}>
+        <div className="destructive-warning"><strong>EXCLUSÃO DEFINITIVA</strong><span>{deleteTarget?.detail || ""}</span><small>{deleteTarget?.type === "class" ? "A turma será removida. Os Alunos permanecerão cadastrados como AGUARDANDO TURMA, o histórico de matrícula será encerrado e os empreendimentos serão preservados sem vínculo com a turma excluída." : "A conta será removida do servidor e suas sessões serão encerradas. Se for Aluno, seus empreendimentos persistidos também serão removidos."}</small></div>
+        <label>DIGITE EXCLUIR PARA CONFIRMAR<input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoComplete="off" /></label>
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setDialog(""); setDeleteTarget(null); setDeleteConfirm(""); }}>CANCELAR</button><button className="danger-button" disabled={Boolean(busy) || deleteConfirm.trim().toUpperCase() !== "EXCLUIR"}>EXCLUIR DEFINITIVAMENTE</button></div>
+      </form>
+    </Modal>
 
     <Modal open={dialog === "user"} title="CADASTRAR USUÁRIO" subtitle={`A senha inicial será ${TEMP_PASSWORD} e deverá ser alterada no primeiro acesso.`} onClose={() => setDialog("")}>
       <form className="orbit-form" onSubmit={createUser}>

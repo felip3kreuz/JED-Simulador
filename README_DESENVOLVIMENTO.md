@@ -171,3 +171,16 @@ A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1
 - Aluno visualiza a avaliação e o parecer na área `MINHA EMPRESA`.
 - A avaliação fica persistida no servidor e não é apagada por sincronizações posteriores do Aluno.
 - O Administrador deixa de exibir na barra lateral os atalhos redundantes `VISÃO GERAL`, `USUÁRIOS` e `IMPORTAR CSV`.
+
+
+## W7.3 — exclusão pelo Administrador Principal e filtros do Mentor
+
+- o Administrador Principal pode excluir definitivamente contas de Aluno, Mentor e Administrador secundário;
+- a própria conta do Administrador Principal é protegida contra exclusão;
+- Mentores que ainda possuem turmas precisam ter suas turmas excluídas antes da remoção da conta;
+- a exclusão de Aluno remove seus vínculos de turma, sessões e empreendimentos persistidos;
+- o Administrador Principal pode excluir turmas; os Alunos permanecem cadastrados e seus empreendimentos são preservados, porém desvinculados da turma;
+- todas as exclusões exigem confirmação explícita digitando `EXCLUIR`;
+- o Mentor pode filtrar RESULTADOS simultaneamente por turma e por avaliação (`APROVADO`, `PENDENTE`, `REPROVADO`);
+- a tela TURMAS pode ser filtrada pela presença de empreendimentos em cada situação de avaliação;
+- os cartões de turma exibem contadores de aprovados, pendentes e reprovados.

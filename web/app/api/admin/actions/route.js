@@ -43,6 +43,14 @@ export async function POST(request) {
         path = "/api/v1/admin/users/import";
         body = { users: Array.isArray(input.users) ? input.users : [] };
         break;
+      case "delete_user":
+        path = "/api/v1/admin/users/delete";
+        body = { user_id: input.user_id };
+        break;
+      case "delete_class":
+        path = "/api/v1/admin/classes/delete";
+        body = { class_id: input.class_id };
+        break;
       default:
         return NextResponse.json({ error: "Ação administrativa inválida." }, { status: 400 });
     }

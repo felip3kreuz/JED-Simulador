@@ -130,3 +130,7 @@ Na RC1.7:
 - Novo comando de teste: `JED_Servidor.exe --test-email`.
 - Configuração local padrão: `servidor_email.json`.
 - O arquivo de configuração SMTP é um segredo local e deve permanecer fora do GitHub.
+
+## W6.1 — Onboarding + Interface Órbita Clean
+
+A camada Web agora expõe os fluxos de cadastro já suportados pelo servidor RC1.8: Aluno, Mentor por credencial MTR e ativação de convite individual. Login/cadastro mantêm o token do servidor exclusivamente em cookie Secure + HttpOnly. A interface foi redesenhada com a mesma paleta, tipografia, grade técnica e hierarquia visual da GUI Win32. Detalhes em `docs/W6_1_ONBOARDING_UI.md`.

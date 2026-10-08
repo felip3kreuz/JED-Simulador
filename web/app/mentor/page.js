@@ -7,5 +7,5 @@ export const metadata = { title: "Mentor · JED Simulador" };
 
 export default async function MentorPage() {
   const user = await requireRole("mentor");
-  return <JEDShell user={user} role="mentor" title="JED ONLINE / MENTOR" subtitle="turmas • alunos • resultados • sincronização"><MentorWorkspace user={user} /></JEDShell>;
+  return <JEDShell user={user} role="mentor" title="JED ONLINE / MENTOR" subtitle="cenários • turmas • alunos • resultados • acompanhamento"><MentorWorkspace user={user} /></JEDShell>;
 }

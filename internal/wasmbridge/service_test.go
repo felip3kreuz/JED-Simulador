@@ -100,3 +100,54 @@ func TestInvalidSimulatorHandleIsReported(t *testing.T) {
 		t.Fatalf("expected structured error, got %s", svc.ProcessWeek(999, string(input)))
 	}
 }
+
+func TestBridgeStockAndSupplyOperations(t *testing.T) {
+	svc := NewService()
+	created := parseEnvelope(t, svc.CreateSimulator("77"))
+	var createdData struct {
+		Handle int `json:"handle"`
+	}
+	if err := json.Unmarshal(created.Data, &createdData); err != nil {
+		t.Fatal(err)
+	}
+
+	company := bridgeFixture()
+	company.UsaInsumos = true
+	company.Insumos = []core.InsumoEstoque{{ID: "farinha", Nome: "Farinha", Unidade: "kg", Quantidade: 3, CustoMedio: 5, CustoReferencia: 5, ConsumoPorVenda: .2, Critico: true}}
+	company.PrazoFornecedorMax = 2
+	input, _ := json.Marshal(company)
+	supplier, _ := json.Marshal(core.FornecedorSpec{ID: "padrao", Nome: "Fornecedor Padrão", MultiplicadorPreco: 1, PrazoEntregaSemanas: 1, Confiabilidade: 1, PrazoPagamentoMax: 2})
+	env := parseEnvelope(t, svc.PlaceInputOrder(createdData.Handle, string(input), "farinha", "10", string(supplier), "0"))
+	if !env.OK {
+		t.Fatalf("pedido falhou: %s", env.Error)
+	}
+	var ordered struct {
+		Empresa  core.Empresa `json:"empresa"`
+		Accepted bool         `json:"accepted"`
+	}
+	if err := json.Unmarshal(env.Data, &ordered); err != nil {
+		t.Fatal(err)
+	}
+	if !ordered.Accepted || len(ordered.Empresa.PedidosInsumos) != 1 {
+		t.Fatalf("pedido não foi registrado: %#v", ordered)
+	}
+
+	stockCompany := bridgeFixture()
+	stockCompany.UsaEstoque = true
+	stockCompany.PrazoFornecedorMax = 2
+	stockJSON, _ := json.Marshal(stockCompany)
+	env = parseEnvelope(t, svc.BuyStock(string(stockJSON), "5", "0"))
+	if !env.OK {
+		t.Fatalf("compra de estoque falhou: %s", env.Error)
+	}
+	var bought struct {
+		Empresa  core.Empresa `json:"empresa"`
+		Accepted bool         `json:"accepted"`
+	}
+	if err := json.Unmarshal(env.Data, &bought); err != nil {
+		t.Fatal(err)
+	}
+	if !bought.Accepted || bought.Empresa.EstoqueUnidades != 5 {
+		t.Fatalf("estoque não atualizado: %#v", bought)
+	}
+}

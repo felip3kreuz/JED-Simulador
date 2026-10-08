@@ -137,3 +137,7 @@ Corrige navegação e feedback de vínculo de turma para contas de Aluno que ain
 - corrige a navegação lateral de Administrador, Mentor e Aluno com rolagem explícita e item ativo;
 - corrige VISÃO GERAL, TURMAS e ALUNOS no painel Mentor;
 - usa no site o mesmo `jed_icon.ico` do executável Windows como favicon.
+
+## Web W7.0 — paridade funcional
+
+A W7.0 substitui o portal parcial W6.x por uma versão Web funcional do simulador: criação de empresa pelo catálogo Setor → Tipo → Especialidade, Persona, Lean Canvas, canais/ferramentas, decisões e processamento via Go/WASM, insumos, financeiro, indicadores, Jornada JED, turmas e sincronização. O Mentor também passa a criar cenários persistentes, associá-los a turmas, importar alunos por CSV e acompanhar resultados. Consulte `docs/W7_0_WEB_PARITY.md`.

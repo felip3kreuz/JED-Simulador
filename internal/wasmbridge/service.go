@@ -9,7 +9,7 @@ import (
 	core "jed-simulador/internal/core"
 )
 
-const Version = "2.0-rc1.8-web-final"
+const Version = "2.0-rc1.8-web-w7.0"
 
 type envelope struct {
 	OK    bool   `json:"ok"`
@@ -120,6 +120,77 @@ func (s *Service) Review(companyJSON string) string {
 		return fail(err)
 	}
 	return ok(core.ReviewHypotheses(e))
+}
+
+func (s *Service) PlaceInputOrder(handle int, companyJSON, inputID, quantityText, supplierJSON, termText string) string {
+	e, err := decodeCompany(companyJSON)
+	if err != nil {
+		return fail(err)
+	}
+	quantity, err := strconv.ParseFloat(quantityText, 64)
+	if err != nil {
+		return fail(fmt.Errorf("quantidade inválida: %w", err))
+	}
+	term, err := strconv.Atoi(termText)
+	if err != nil {
+		return fail(fmt.Errorf("prazo inválido: %w", err))
+	}
+	var supplier core.FornecedorSpec
+	if err := json.Unmarshal([]byte(supplierJSON), &supplier); err != nil {
+		return fail(fmt.Errorf("fornecedor inválido: %w", err))
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sim, exists := s.sims[handle]
+	if !exists {
+		return fail(fmt.Errorf("simulador %d não existe", handle))
+	}
+	okOrder, cost, note := core.PlaceInputOrder(e, inputID, quantity, supplier, term, sim.RandomSource())
+	return ok(struct {
+		Empresa *core.Empresa `json:"empresa"`
+		OK      bool          `json:"accepted"`
+		Cost    float64       `json:"cost"`
+		Note    string        `json:"note"`
+	}{Empresa: e, OK: okOrder, Cost: cost, Note: note})
+}
+
+func (s *Service) BuyStock(companyJSON, quantityText, termText string) string {
+	e, err := decodeCompany(companyJSON)
+	if err != nil {
+		return fail(err)
+	}
+	quantity, err := strconv.Atoi(quantityText)
+	if err != nil {
+		return fail(fmt.Errorf("quantidade inválida: %w", err))
+	}
+	term, err := strconv.Atoi(termText)
+	if err != nil {
+		return fail(fmt.Errorf("prazo inválido: %w", err))
+	}
+	accepted, cost, note := core.BuyStock(e, quantity, term)
+	return ok(struct {
+		Empresa *core.Empresa `json:"empresa"`
+		OK      bool          `json:"accepted"`
+		Cost    float64       `json:"cost"`
+		Note    string        `json:"note"`
+	}{Empresa: e, OK: accepted, Cost: cost, Note: note})
+}
+
+func (s *Service) JourneyStep(companyJSON string) string {
+	e, err := decodeCompany(companyJSON)
+	if err != nil {
+		return fail(err)
+	}
+	return ok(map[string]any{"step": core.JourneyStep(e)})
+}
+
+func (s *Service) CanvasExplanations(companyJSON string) string {
+	e, err := decodeCompany(companyJSON)
+	if err != nil {
+		return fail(err)
+	}
+	return ok(core.CanvasExplanations(e))
 }
 
 func (s *Service) DigitalChannels() string {

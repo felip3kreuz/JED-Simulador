@@ -33,6 +33,7 @@ type serverState struct {
 	Users             map[string]serverUserRecord       `json:"users"`
 	Classes           map[string]OnlineClass            `json:"classes"`
 	Companies         map[string]RemoteCompany          `json:"companies"`
+	Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 	Invitations       map[string]serverInvitation       `json:"invitations"`
 	MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
 	Sessions          map[string]serverSession          `json:"-"`
@@ -116,6 +117,7 @@ func newServerState(root string) *serverState {
 		Users:             map[string]serverUserRecord{},
 		Classes:           map[string]OnlineClass{},
 		Companies:         map[string]RemoteCompany{},
+		Scenarios:         map[string]OnlineScenario{},
 		Invitations:       map[string]serverInvitation{},
 		MentorInvitations: map[string]serverMentorInvitation{},
 		Sessions:          map[string]serverSession{},
@@ -137,6 +139,7 @@ func (st *serverState) load() error {
 		Users             map[string]serverUserRecord       `json:"users"`
 		Classes           map[string]OnlineClass            `json:"classes"`
 		Companies         map[string]RemoteCompany          `json:"companies"`
+		Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
 	}
@@ -151,6 +154,9 @@ func (st *serverState) load() error {
 	}
 	if disk.Companies != nil {
 		st.Companies = disk.Companies
+	}
+	if disk.Scenarios != nil {
+		st.Scenarios = disk.Scenarios
 	}
 	if disk.Invitations != nil {
 		st.Invitations = disk.Invitations
@@ -190,9 +196,10 @@ func (st *serverState) saveLocked() error {
 		Users             map[string]serverUserRecord       `json:"users"`
 		Classes           map[string]OnlineClass            `json:"classes"`
 		Companies         map[string]RemoteCompany          `json:"companies"`
+		Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
-	}{st.Users, st.Classes, st.Companies, st.Invitations, st.MentorInvitations}
+	}{st.Users, st.Classes, st.Companies, st.Scenarios, st.Invitations, st.MentorInvitations}
 
 	b, err := json.MarshalIndent(disk, "", "  ")
 	if err != nil {
@@ -1207,6 +1214,92 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, inv)
+	})
+
+	mux.HandleFunc("/api/v1/scenarios", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := st.require(w, r, "tutor", "mentor")
+		if !ok {
+			return
+		}
+		switch r.Method {
+		case "GET":
+			out := []OnlineScenario{}
+			baseIDs := []string{"base-estavel", "base-aquecido", "base-desaceleracao", "base-concorrencia"}
+			for i, scenario := range cenariosBase {
+				if scenario.Duracao == 0 {
+					scenario.Duracao = 12
+				}
+				if scenario.Dificuldade == "" {
+					scenario.Dificuldade = "intermediario"
+				}
+				if scenario.ConcorrenciaNivel == "" {
+					scenario.ConcorrenciaNivel = "media"
+				}
+				if scenario.ConcorrenciaIndice == 0 {
+					scenario.ConcorrenciaIndice = 1
+				}
+				out = append(out, OnlineScenario{ID: baseIDs[i], Builtin: true, Scenario: scenario})
+			}
+			st.mu.RLock()
+			for _, scenario := range st.Scenarios {
+				if scenario.TutorID == u.ID {
+					out = append(out, scenario)
+				}
+			}
+			st.mu.RUnlock()
+			sort.SliceStable(out, func(i, j int) bool {
+				if out[i].Builtin != out[j].Builtin {
+					return out[i].Builtin
+				}
+				return strings.ToLower(out[i].Scenario.Nome) < strings.ToLower(out[j].Scenario.Nome)
+			})
+			writeJSON(w, 200, out)
+		case "POST":
+			var in Cenario
+			if readJSON(r, &in) != nil || strings.TrimSpace(in.Nome) == "" {
+				apiErr(w, 400, "dados inválidos")
+				return
+			}
+			in.Nome = strings.TrimSpace(in.Nome)
+			if in.Alcance <= 0 {
+				in.Alcance = 1
+			}
+			if in.Conversao <= 0 {
+				in.Conversao = 1
+			}
+			if in.Oscilacao < 0 {
+				in.Oscilacao = 0
+			}
+			if in.Duracao <= 0 {
+				in.Duracao = 12
+			}
+			if in.Dificuldade == "" {
+				in.Dificuldade = "intermediario"
+			}
+			if in.ConcorrenciaNivel == "" {
+				in.ConcorrenciaNivel = "media"
+			}
+			if in.ConcorrenciaIndice <= 0 {
+				in.ConcorrenciaIndice = 1
+			}
+			now := time.Now().UTC().Format(time.RFC3339)
+			in.LocalID = "scn-" + randomHex(8)
+			in.CreatedAt = now
+			in.UpdatedAt = now
+			in.Revision = 1
+			entry := OnlineScenario{ID: in.LocalID, TutorID: u.ID, Scenario: in, CreatedAt: now}
+			st.mu.Lock()
+			st.Scenarios[entry.ID] = entry
+			err := st.saveLocked()
+			st.mu.Unlock()
+			if err != nil {
+				apiErr(w, 500, "erro ao salvar cenário")
+				return
+			}
+			writeJSON(w, 201, entry)
+		default:
+			apiErr(w, 405, "método não permitido")
+		}
 	})
 
 	mux.HandleFunc("/api/v1/classes", func(w http.ResponseWriter, r *http.Request) {

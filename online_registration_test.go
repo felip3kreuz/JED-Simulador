@@ -157,3 +157,61 @@ func TestStudentInvitationCreatesPasswordAndPreservesInstitutionalID(t *testing.
 		t.Fatal("Aluno ativado pelo convite deveria estar vinculado à turma")
 	}
 }
+
+func TestMentorScenarioAPI(t *testing.T) {
+	st := newServerState(t.TempDir())
+	mentor, err := st.createUser("Mentor Cenários", "mentor-cenarios@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := st.newSession(mentor.ID)
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]any{
+		"nome":                "Piloto Web",
+		"alcance":             1.05,
+		"conversao":           1.02,
+		"oscilacao":           0.09,
+		"duracao":             10,
+		"concorrencia_nivel":  "media",
+		"concorrencia_indice": 1.0,
+		"dificuldade":         "intermediario",
+	})
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/scenarios", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("criação de cenário retornou HTTP %d", resp.StatusCode)
+	}
+	var created OnlineScenario
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.Scenario.Nome != "Piloto Web" || created.Scenario.Duracao != 10 {
+		t.Fatalf("cenário criado inválido: %#v", created)
+	}
+
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/api/v1/scenarios", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err = ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var list []OnlineScenario
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list) < 5 { // 4 cenários-base + o personalizado
+		t.Fatalf("lista de cenários incompleta: %d", len(list))
+	}
+}

@@ -7,5 +7,5 @@ export const metadata = { title: "Aluno · JED Simulador" };
 
 export default async function AlunoPage() {
   const user = await requireRole("aluno");
-  return <JEDShell user={user} role="aluno" title="JED ONLINE / ALUNO" subtitle="empresa • decisões • processamento • turmas"><StudentWorkspace user={user} /></JEDShell>;
+  return <JEDShell user={user} role="aluno" title="JED ONLINE / ALUNO" subtitle="empresa • persona • canvas • decisões • insumos • indicadores • turmas"><StudentWorkspace user={user} /></JEDShell>;
 }

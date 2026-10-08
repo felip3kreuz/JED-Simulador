@@ -32,6 +32,9 @@ func serverEmailConfigPath() string {
 	if p := strings.TrimSpace(os.Getenv("JED_SMTP_CONFIG")); p != "" {
 		return p
 	}
+	if root := strings.TrimSpace(os.Getenv("JED_SERVER_DATA")); root != "" {
+		return filepath.Join(root, "servidor_email.json")
+	}
 	exe, err := os.Executable()
 	if err == nil {
 		return filepath.Join(filepath.Dir(exe), "servidor_email.json")
@@ -248,6 +251,99 @@ func sendSMTPMessage(cfg serverEmailConfig, to, subject, body string) error {
 	return nil
 }
 
+func accountRoleLabel(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "admin":
+		return "Administrador"
+	case "mentor", "tutor":
+		return "Mentor"
+	default:
+		return "Aluno"
+	}
+}
+
+func jedPublicURL() string {
+	if v := strings.TrimSpace(os.Getenv("JED_PUBLIC_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://jed-simulador-onpq.vercel.app"
+}
+
+func accountCreatedEmail(u OnlineUser, temporaryPassword string) (string, string) {
+	name := strings.TrimSpace(u.Name)
+	if name == "" {
+		name = "usuário"
+	}
+	role := accountRoleLabel(u.Role)
+	subject := "Seu cadastro no JED Simulador"
+	body := fmt.Sprintf(`Olá, %s.
+
+Seu cadastro no JED Simulador foi realizado por um Administrador.
+
+Perfil: %s
+E-mail de acesso: %s
+Senha temporária: %s
+
+Acesse: %s
+
+No primeiro acesso, a plataforma exigirá a substituição da senha temporária por uma senha pessoal com pelo menos 8 caracteres.
+
+Não compartilhe sua senha. Se você não esperava este cadastro, entre em contato com a administração da sua instituição.
+
+JED Simulador
+`, name, role, u.Email, temporaryPassword, jedPublicURL())
+	return subject, body
+}
+
+func (st *serverState) updateUserEmailDelivery(userID, status, sentAt, emailErr string) OnlineUser {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	rec, ok := st.Users[userID]
+	if !ok {
+		return OnlineUser{}
+	}
+	rec.EmailStatus = status
+	rec.EmailSentAt = sentAt
+	rec.EmailError = emailErr
+	st.Users[userID] = rec
+	if err := st.saveLocked(); err != nil && rec.EmailError == "" {
+		rec.EmailError = "o envio foi concluído, mas não foi possível salvar o status do e-mail"
+		st.Users[userID] = rec
+	}
+	return rec.OnlineUser
+}
+
+func (st *serverState) deliverAccountCreatedEmail(u OnlineUser, temporaryPassword string) OnlineUser {
+	cfg, configured, err := loadServerEmailConfig()
+	if err != nil {
+		return st.updateUserEmailDelivery(u.ID, "failed", "", err.Error())
+	}
+	if !configured {
+		return st.updateUserEmailDelivery(u.ID, "not_configured", "", "")
+	}
+	subject, body := accountCreatedEmail(u, temporaryPassword)
+	if err := sendSMTPMessage(cfg, u.Email, subject, body); err != nil {
+		return st.updateUserEmailDelivery(u.ID, "failed", "", err.Error())
+	}
+	return st.updateUserEmailDelivery(u.ID, "sent", time.Now().UTC().Format(time.RFC3339), "")
+}
+
+func emailConfigurationStatus() map[string]any {
+	cfg, configured, err := loadServerEmailConfig()
+	out := map[string]any{"configured": configured}
+	if err != nil {
+		out["configured"] = false
+		out["error"] = err.Error()
+		return out
+	}
+	if configured {
+		out["from_email"] = cfg.FromEmail
+		out["from_name"] = cfg.FromName
+		out["host"] = cfg.Host
+	}
+	return out
+}
+
 func mentorCredentialEmail(inv serverMentorInvitation) (string, string) {
 	subject := "Convite para acessar o JED Simulador como Mentor"
 	name := strings.TrimSpace(inv.Name)
@@ -454,7 +550,7 @@ func configureEmailInteractive() error {
 	fmt.Println("Configuração de e-mail salva em:")
 	fmt.Println(serverEmailConfigPath())
 	fmt.Println()
-	fmt.Println("Use JED_Servidor.exe --test-email para testar antes de credenciar Mentores.")
+	fmt.Println("Use JED_Servidor.exe --test-email para validar o envio antes de cadastrar usuários.")
 	return nil
 }
 

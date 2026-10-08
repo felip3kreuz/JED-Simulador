@@ -15,16 +15,17 @@ import (
 )
 
 type OnlineConfig struct {
-	ServerURL        string `json:"server_url"`
-	Token            string `json:"token"`
-	UserID           string `json:"user_id"`
-	Email            string `json:"email"`
-	Name             string `json:"name"`
-	Role             string `json:"role"`
-	Status           string `json:"status,omitempty"`
-	IsPrimaryAdmin   bool   `json:"is_primary_admin,omitempty"`
-	CanInviteMentors bool   `json:"can_invite_mentors,omitempty"`
-	ClassID          string `json:"class_id,omitempty"`
+	ServerURL          string `json:"server_url"`
+	Token              string `json:"token"`
+	UserID             string `json:"user_id"`
+	Email              string `json:"email"`
+	Name               string `json:"name"`
+	Role               string `json:"role"`
+	Status             string `json:"status,omitempty"`
+	IsPrimaryAdmin     bool   `json:"is_primary_admin,omitempty"`
+	CanInviteMentors   bool   `json:"can_invite_mentors,omitempty"`
+	MustChangePassword bool   `json:"must_change_password,omitempty"`
+	ClassID            string `json:"class_id,omitempty"`
 }
 
 type OnlineLoginResponse struct {
@@ -33,16 +34,20 @@ type OnlineLoginResponse struct {
 }
 
 type OnlineUser struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	Email            string `json:"email"`
-	Role             string `json:"role"` // aluno | tutor (legado) | mentor | admin
-	Status           string `json:"status,omitempty"`
-	Institution      string `json:"institution,omitempty"`
-	InstitutionalID  string `json:"institutional_id,omitempty"`
-	IsPrimaryAdmin   bool   `json:"is_primary_admin,omitempty"`
-	CanInviteMentors bool   `json:"can_invite_mentors,omitempty"`
-	CreatedAt        string `json:"created_at,omitempty"`
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Email              string `json:"email"`
+	Role               string `json:"role"` // aluno | tutor (legado) | mentor | admin
+	Status             string `json:"status,omitempty"`
+	Institution        string `json:"institution,omitempty"`
+	InstitutionalID    string `json:"institutional_id,omitempty"`
+	IsPrimaryAdmin     bool   `json:"is_primary_admin,omitempty"`
+	CanInviteMentors   bool   `json:"can_invite_mentors,omitempty"`
+	MustChangePassword bool   `json:"must_change_password,omitempty"`
+	EmailStatus        string `json:"email_status,omitempty"`
+	EmailSentAt        string `json:"email_sent_at,omitempty"`
+	EmailError         string `json:"email_error,omitempty"`
+	CreatedAt          string `json:"created_at,omitempty"`
 }
 
 type OnlineClass struct {
@@ -203,6 +208,7 @@ func applyOnlineLogin(server string, r OnlineLoginResponse) {
 	onlineConfig.Status = r.User.Status
 	onlineConfig.IsPrimaryAdmin = r.User.IsPrimaryAdmin
 	onlineConfig.CanInviteMentors = r.User.CanInviteMentors
+	onlineConfig.MustChangePassword = r.User.MustChangePassword
 	saveOnlineConfig()
 }
 
@@ -256,12 +262,18 @@ func onlineValidateSession() error {
 	onlineConfig.Status = u.Status
 	onlineConfig.IsPrimaryAdmin = u.IsPrimaryAdmin
 	onlineConfig.CanInviteMentors = u.CanInviteMentors
+	onlineConfig.MustChangePassword = u.MustChangePassword
 	saveOnlineConfig()
 	return nil
 }
 
 func onlineChangePassword(current, next string) error {
-	return apiRequest("POST", "/api/v1/password", map[string]string{"current": current, "new": next}, nil)
+	err := apiRequest("POST", "/api/v1/password", map[string]string{"current": current, "new": next}, nil)
+	if err == nil {
+		onlineConfig.MustChangePassword = false
+		saveOnlineConfig()
+	}
+	return err
 }
 
 func onlineRevokeInvitation(code string) error {

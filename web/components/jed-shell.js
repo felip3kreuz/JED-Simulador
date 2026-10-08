@@ -12,7 +12,7 @@ export function JEDChrome({ compact = false }) {
       </Link>
       <div className="orbit-chrome-meta">
         <span className="orbit-help">F1 AJUDA&nbsp;&nbsp;•&nbsp;&nbsp;WEB ONLINE</span>
-        <strong>SYS 2.0 RC1.8 / W7.0</strong>
+        <strong>SYS 2.0 RC1.8 / W7.1</strong>
       </div>
     </header>
   );

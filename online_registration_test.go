@@ -81,42 +81,89 @@ func postJSON(t *testing.T, client *http.Client, url string, body any, out any) 
 	return resp.StatusCode
 }
 
-func TestRegistrationAPIFlow(t *testing.T) {
+func TestPublicRegistrationIsDisabledAndAdminProvisioningRequiresPasswordChange(t *testing.T) {
 	st := newServerState(t.TempDir())
-	first, err := st.createInitialAdmin("Admin Inicial", "admin1@example.com", "SenhaSegura123")
+	admin, err := st.createInitialAdmin("Admin Inicial", "admin1@example.com", "SenhaSegura123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	cred, err := st.createMentorInvitation(first, "Mentora Dois", "mentor2@example.com", "Escola JED", "M-002")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	ts := httptest.NewServer(st.handler())
 	defer ts.Close()
 
-	var student OnlineLoginResponse
+	var apiErrBody APIError
 	status := postJSON(t, ts.Client(), ts.URL+"/api/v1/register/student", map[string]string{
 		"name": "Aluno Um", "email": "aluno1@example.com", "password": "SenhaAluno123",
-		"institutional_id": "A-001",
-	}, &student)
-	if status != http.StatusCreated {
-		t.Fatalf("cadastro de aluno retornou HTTP %d", status)
-	}
-	if student.User.Role != "aluno" || student.Token == "" {
-		t.Fatalf("resposta de aluno inválida: %#v", student)
+	}, &apiErrBody)
+	if status != http.StatusForbidden {
+		t.Fatalf("autocadastro de aluno deveria retornar 403; recebeu %d", status)
 	}
 
-	var mentor OnlineLoginResponse
-	status = postJSON(t, ts.Client(), ts.URL+"/api/v1/register/mentor", map[string]string{
-		"name": "Mentora Dois", "email": "mentor2@example.com", "password": "SenhaMentor123",
-		"institution": "Escola JED", "institutional_id": "M-002", "credential_code": cred.Code,
-	}, &mentor)
-	if status != http.StatusCreated {
-		t.Fatalf("cadastro de mentor retornou HTTP %d", status)
+	token := st.newSession(admin.ID)
+	body, _ := json.Marshal(map[string]string{
+		"name": "Aluno Um", "email": "aluno1@example.com", "role": "aluno", "institutional_id": "A-001",
+	})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/admin/users/create", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if mentor.User.Role != "mentor" || mentor.Token == "" {
-		t.Fatalf("resposta de mentor inválida: %#v", mentor)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("cadastro administrativo retornou HTTP %d", resp.StatusCode)
+	}
+	var created OnlineUser
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Role != "aluno" || !created.MustChangePassword || created.InstitutionalID != "A-001" {
+		t.Fatalf("usuário provisionado inválido: %#v", created)
+	}
+	if _, ok := st.authenticate(created.Email, defaultProvisionedPassword); !ok {
+		t.Fatal("senha temporária padrão deveria autenticar")
+	}
+}
+
+func TestTemporaryPasswordMustBeChangedBeforeProtectedAPI(t *testing.T) {
+	st := newServerState(t.TempDir())
+	admin, err := st.createInitialAdmin("Admin", "admin@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createProvisionedUser(admin, "Aluno", "aluno@example.com", "aluno", "Escola", "A-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := st.newSession(student.ID)
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/classes", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPreconditionRequired {
+		t.Fatalf("API protegida deveria exigir troca de senha (428); recebeu %d", resp.StatusCode)
+	}
+
+	body, _ := json.Marshal(map[string]string{"current": defaultProvisionedPassword, "new": "NovaSenha123"})
+	req, _ = http.NewRequest(http.MethodPost, ts.URL+"/api/v1/password", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("troca de senha HTTP %d", resp.StatusCode)
+	}
+	if st.Users[student.ID].MustChangePassword {
+		t.Fatal("flag de primeiro acesso não foi limpa")
 	}
 }
 

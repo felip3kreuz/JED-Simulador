@@ -566,24 +566,16 @@ func onlineHomeSubtitle() string {
 		}
 		return fmt.Sprintf("%s • %s • %s", role, onlineConfig.Name, onlineConfig.ServerURL)
 	}
-	return "Entrar ou criar conta como ALUNO ou MENTOR."
+	return "Contas são cadastradas por Administradores. Use seu e-mail e a senha temporária recebida."
 }
 
 func drawOnline(hdc uintptr, cr rect) {
 	drawChrome(hdc, cr, "JED ONLINE", "contas • turmas • administração • sincronização")
 	if onlineConfig.Token == "" {
 		text(hdc, "NENHUMA SESSÃO ATIVA", rect{60, 175, cr.Right - 60, 220}, 22, colInk, DT_LEFT, true)
-		multiText(hdc, "Aluno cria a própria conta. Mentor precisa de uma credencial MTR. Administrador nunca é criado pelo cadastro público.", rect{60, 225, cr.Right - 60, 285}, 11, colMuted, false)
-		colW := int32(300)
-		gap := int32(20)
-		x1 := int32(60)
-		x2 := x1 + colW + gap
-		x3 := x2 + colW + gap
-		button(hdc, "online:login", "ENTRAR", "E-mail e senha de uma conta existente.", rect{x1, 310, x1 + colW, 385}, colCyan)
-		button(hdc, "online:registerstudent", "CADASTRAR ALUNO", "Crie uma conta de aluno livremente.", rect{x2, 310, x2 + colW, 385}, colInk)
-		button(hdc, "online:registermentor", "CADASTRAR MENTOR", "Exige código de credenciamento MTR.", rect{x3, 310, x3 + colW, 385}, colInk)
-		button(hdc, "online:activate", "ATIVAR CONVITE DE ALUNO", "Compatibilidade: convite individual emitido por mentor.", rect{60, 410, 520, 485}, colInk)
-		button(hdc, "online:server", "CONFIGURAR SERVIDOR", "Alterar somente o endereço do servidor.", rect{540, 410, 1000, 485}, colInk)
+		multiText(hdc, "Contas de Aluno, Mentor e Administrador são cadastradas exclusivamente por Administradores. No primeiro acesso, use a senha temporária recebida por e-mail e substitua-a por uma senha pessoal.", rect{60, 225, cr.Right - 60, 300}, 11, colMuted, false)
+		button(hdc, "online:login", "ENTRAR", "E-mail e senha de uma conta cadastrada pelo Administrador.", rect{60, 325, 520, 400}, colCyan)
+		button(hdc, "online:server", "CONFIGURAR SERVIDOR", "Alterar somente o endereço do servidor.", rect{540, 325, 1000, 400}, colInk)
 		backButton(hdc, cr)
 		return
 	}
@@ -622,15 +614,7 @@ func drawOnline(hdc uintptr, cr rect) {
 		button(hdc, "online:classes", "MINHAS TURMAS", "Listar turmas vinculadas.", rect{x2, 285, x2 + cw, 359}, colInk)
 		button(hdc, "online:classcompanies", "RESULTADOS", "Ver empresas sincronizadas.", rect{x3, 285, x3 + cw, 359}, colInk)
 
-		button(hdc, "online:invite", "CONVIDAR ALUNO", "Convite individual para uma turma.", rect{x1, 375, x1 + cw, 449}, colInk)
-		button(hdc, "online:importcsv", "IMPORTAR ALUNOS", "Importar CSV para uma turma.", rect{x2, 375, x2 + cw, 449}, colInk)
-		button(hdc, "online:invites", "CONVITES DE ALUNO", "Consultar códigos e status.", rect{x3, 375, x3 + cw, 449}, colInk)
-
-		if onlineConfig.CanInviteMentors {
-			button(hdc, "online:mentorinvite", "CREDENCIAR MENTOR", "Permissão delegada pelo Administrador.", rect{x1, 465, x1 + cw, 539}, colCyan)
-			button(hdc, "online:mentorinvites", "CREDENCIAIS MENTOR", "Consultar códigos MTR emitidos.", rect{x2, 465, x2 + cw, 539}, colInk)
-			button(hdc, "online:revoke", "REVOGAR CÓDIGO", "Cancelar convite ou credencial.", rect{x3, 465, x3 + cw, 539}, colInk)
-		}
+		multiText(hdc, "O cadastro de Alunos, Mentores e Administradores é exclusivo do painel de Administração. O Mentor organiza turmas e acompanha resultados.", rect{x1, 385, right, 455}, 11, colMuted, false)
 	} else if onlineConfig.Role == "admin" {
 		left := int32(60)
 		right := cr.Right - 60
@@ -640,17 +624,12 @@ func drawOnline(hdc uintptr, cr rect) {
 		x2 := x1 + cw + gap
 		x3 := x2 + cw + gap
 
-		button(hdc, "online:adminusers", "USUÁRIOS", "Listar contas e permissões.", rect{x1, 285, x1 + cw, 359}, colCyan)
-		button(hdc, "online:admincreate", "CRIAR ADMIN", "Criar outro Administrador.", rect{x2, 285, x2 + cw, 359}, colInk)
+		button(hdc, "online:adminusers", "USUÁRIOS", "Listar contas e estado.", rect{x1, 285, x1 + cw, 359}, colCyan)
+		button(hdc, "online:admincreate", "CRIAR ADMIN", "Cria com a senha temporária padrão.", rect{x2, 285, x2 + cw, 359}, colInk)
 		button(hdc, "online:adminstatus", "ATIVAR / DESATIVAR", "Controlar acesso de uma conta.", rect{x3, 285, x3 + cw, 359}, colInk)
-
-		button(hdc, "online:mentorinvite", "CREDENCIAR MENTOR", "Emitir credencial MTR de uso único.", rect{x1, 375, x1 + cw, 449}, colCyan)
-		button(hdc, "online:mentorinvites", "CREDENCIAIS MENTOR", "Consultar credenciais emitidas.", rect{x2, 375, x2 + cw, 449}, colInk)
-		button(hdc, "online:revoke", "REVOGAR CREDENCIAL", "Cancelar credencial MTR pendente.", rect{x3, 375, x3 + cw, 449}, colInk)
-
-		button(hdc, "online:adminmentorperm", "PERMISSÃO DE MENTOR", "Autorizar ou revogar delegação MTR.", rect{x1, 465, x1 + cw, 539}, colInk)
+		multiText(hdc, "Para cadastrar Alunos e Mentores, e para importação CSV, use o painel Web de Administração.", rect{x1, 390, right, 445}, 11, colMuted, false)
 		if onlineConfig.IsPrimaryAdmin {
-			button(hdc, "online:admintransfer", "TRANSFERIR PRINCIPAL", "Definir outro Admin como principal.", rect{x2, 465, x2 + cw, 539}, colMagenta)
+			button(hdc, "online:admintransfer", "TRANSFERIR PRINCIPAL", "Definir outro Admin como principal.", rect{x1, 465, x1 + cw, 539}, colMagenta)
 		}
 	}
 
@@ -767,6 +746,23 @@ func nativeOnlineLogin() {
 	if err := onlineLogin(server, email, password); err != nil {
 		nativeInfo("Falha no login", err.Error())
 		return
+	}
+	if onlineConfig.MustChangePassword {
+		nativeInfo("PRIMEIRO ACESSO", "Esta conta usa uma senha temporária. Defina agora uma nova senha pessoal.")
+		next, ok := nativePromptSecret("PRIMEIRO ACESSO", "Nova senha (mínimo 8 caracteres)")
+		if !ok {
+			nativeInfo("Primeiro acesso", "A troca de senha é obrigatória antes de usar o JED Online.")
+			return
+		}
+		confirm, ok := nativePromptSecret("PRIMEIRO ACESSO", "Repita a nova senha")
+		if !ok || next != confirm {
+			nativeInfo("Primeiro acesso", "As novas senhas não coincidem.")
+			return
+		}
+		if err := onlineChangePassword(password, next); err != nil {
+			nativeInfo("Primeiro acesso", err.Error())
+			return
+		}
 	}
 	role := strings.ToUpper(onlineConfig.Role)
 	if onlineConfig.Role == "tutor" || onlineConfig.Role == "mentor" {
@@ -1026,24 +1022,12 @@ func nativeOnlineAdminCreate() {
 	if !ok {
 		return
 	}
-	pass, ok := nativePromptSecret("CRIAR ADMIN", "Senha temporária (mínimo 8 caracteres)")
-	if !ok {
-		return
-	}
-	confirm, ok := nativePromptSecret("CRIAR ADMIN", "Repita a senha temporária")
-	if !ok {
-		return
-	}
-	if pass != confirm {
-		nativeInfo("CRIAR ADMIN", "As senhas não coincidem.")
-		return
-	}
-	u, err := onlineAdminCreateAdmin(name, email, pass)
+	u, err := onlineAdminCreateAdmin(name, email, defaultProvisionedPassword)
 	if err != nil {
 		nativeInfo("CRIAR ADMIN", err.Error())
 		return
 	}
-	nativeInfo("CRIAR ADMIN", fmt.Sprintf("Administrador criado:\n%s\n%s\n\nPeça que ele altere a senha no primeiro acesso.", u.Name, u.Email))
+	nativeInfo("CRIAR ADMIN", fmt.Sprintf("Administrador criado:\n%s\n%s\n\nSenha temporária: %s\nA troca será obrigatória no primeiro acesso. O servidor tentará enviar os dados por e-mail.", u.Name, u.Email, defaultProvisionedPassword))
 }
 
 func nativeOnlineAdminStatus() {
@@ -2036,14 +2020,8 @@ func handleHit(id string) {
 	case id == "online:login":
 		nativeOnlineLogin()
 		ns.screen = "online"
-	case id == "online:registerstudent":
-		nativeOnlineRegisterStudent()
-		ns.screen = "online"
-	case id == "online:registermentor":
-		nativeOnlineRegisterMentor()
-		ns.screen = "online"
-	case id == "online:activate":
-		nativeOnlineActivate()
+	case id == "online:registerstudent" || id == "online:registermentor" || id == "online:activate":
+		nativeInfo("Cadastro", "Contas são cadastradas exclusivamente por Administradores.")
 		ns.screen = "online"
 	case id == "online:server":
 		v, ok := nativePrompt("SERVIDOR JED", "Endereço do servidor", onlineConfig.ServerURL)

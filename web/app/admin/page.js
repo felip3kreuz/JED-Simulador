@@ -7,5 +7,5 @@ export const metadata = { title: "Administrador · JED Simulador" };
 
 export default async function AdminPage() {
   const user = await requireRole("admin");
-  return <JEDShell user={user} role="admin" title="ADMINISTRAÇÃO" subtitle="usuários • credenciais • permissões • servidor"><AdminWorkspace user={user} /></JEDShell>;
+  return <JEDShell user={user} role="admin" title="ADMINISTRAÇÃO" subtitle="usuários • importação CSV • primeiro acesso • e-mail"><AdminWorkspace user={user} /></JEDShell>;
 }

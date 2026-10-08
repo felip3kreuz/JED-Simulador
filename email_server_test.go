@@ -173,3 +173,36 @@ func TestMentorEmailFailureDoesNotRemoveCredential(t *testing.T) {
 		t.Fatal("credencial foi perdida após falha de SMTP")
 	}
 }
+
+func TestAccountCreatedEmailUsesTemporaryPassword(t *testing.T) {
+	fake := startFakeSMTP(t)
+	host, port := fake.address()
+	t.Setenv("JED_SMTP_CONFIG", t.TempDir()+"/nao-existe.json")
+	t.Setenv("JED_SMTP_HOST", host)
+	t.Setenv("JED_SMTP_PORT", strconv.Itoa(port))
+	t.Setenv("JED_SMTP_FROM", "jed@example.com")
+	t.Setenv("JED_SMTP_FROM_NAME", "JED Simulador")
+	t.Setenv("JED_SMTP_SECURITY", "plain")
+	t.Setenv("JED_SMTP_USER", "")
+	t.Setenv("JED_SMTP_PASSWORD", "")
+
+	st := newServerState(t.TempDir())
+	admin, err := st.createInitialAdmin("Admin", "admin@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createProvisionedUser(admin, "Aluno Teste", "aluno@example.com", "aluno", "Escola", "A-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if student.EmailStatus != "sent" {
+		t.Fatalf("status de e-mail esperado sent; recebido %q", student.EmailStatus)
+	}
+	msg := fake.waitMessage(t)
+	if !strings.Contains(msg, "acbd1234") {
+		t.Fatalf("senha temporária não encontrada no e-mail:\n%s", msg)
+	}
+	if !strings.Contains(msg, "primeiro acesso") && !strings.Contains(msg, "primeiro=20acesso") {
+		t.Fatalf("instrução de primeiro acesso ausente:\n%s", msg)
+	}
+}

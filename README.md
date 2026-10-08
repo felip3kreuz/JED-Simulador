@@ -151,3 +151,8 @@ Modelo: `MODELO_IMPORTACAO_USUARIOS.csv`.
 ### W7.2 — avaliação dos empreendimentos
 
 Mentores podem aprovar ou reprovar os empreendimentos vinculados às suas turmas e registrar comentários pedagógicos. A avaliação fica visível ao Aluno e persiste no JED Servidor. A barra lateral do Administrador também foi simplificada para eliminar navegação redundante.
+
+
+### W7.3 — administração destrutiva e filtros de avaliação
+
+O Administrador Principal passa a poder excluir contas e turmas com confirmação explícita. A conta principal é protegida, Mentores com turmas devem ter essas turmas removidas primeiro e a exclusão de uma turma preserva os empreendimentos dos Alunos, apenas removendo o vínculo com a turma. No painel do Mentor, RESULTADOS agora possui filtros combináveis por turma e situação (`APROVADO`, `PENDENTE`, `REPROVADO`), e a tela TURMAS pode ser filtrada pelos mesmos estados.

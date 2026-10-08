@@ -148,3 +148,166 @@ func TestAdminAPI(t *testing.T) {
 		t.Fatalf("esperava 2 usuários, recebeu %d", len(users))
 	}
 }
+
+func TestPrimaryAdminDeletionAndClassDetach(t *testing.T) {
+	st := newServerState(t.TempDir())
+	primary, err := st.createInitialAdmin("Admin Principal", "principal@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondary, err := st.createAdmin(primary, "Admin Dois", "admin2@example.com", "SenhaAdmin456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mentor, err := st.createUser("Mentor", "mentor-delete@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createUser("Aluno", "aluno-delete@example.com", "SenhaAluno123", "aluno")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := OnlineClass{ID: "tur-delete", Name: "Turma Exclusão", TutorID: mentor.ID, JoinCode: "DEL123", StudentIDs: []string{student.ID}, Scenario: cenariosBase[0]}
+	st.Classes[cl.ID] = cl
+	st.Companies[student.ID+":empresa"] = RemoteCompany{
+		ID: student.ID + ":empresa", OwnerID: student.ID, ClassID: cl.ID,
+		Company: Empresa{LocalID: "empresa", Nome: "Empresa Teste", TurmaID: cl.ID},
+	}
+
+	if _, err := st.deleteUserAsPrimary(secondary, student.ID); err == nil {
+		t.Fatal("administrador secundário não deveria excluir usuários")
+	}
+	if _, err := st.deleteUserAsPrimary(primary, mentor.ID); err == nil {
+		t.Fatal("Mentor com turma deveria exigir exclusão da turma antes")
+	}
+
+	deletedClass, detached, err := st.deleteClassAsPrimary(primary, cl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deletedClass.ID != cl.ID || detached != 1 {
+		t.Fatalf("exclusão de turma inesperada: class=%#v detached=%d", deletedClass, detached)
+	}
+	remote := st.Companies[student.ID+":empresa"]
+	if remote.ClassID != "" || remote.Company.TurmaID != "" {
+		t.Fatalf("empresa deveria ser preservada e desvinculada: %#v", remote)
+	}
+	if _, err := st.deleteUserAsPrimary(primary, mentor.ID); err != nil {
+		t.Fatalf("Mentor sem turmas deveria poder ser excluído: %v", err)
+	}
+	if _, ok := st.Users[mentor.ID]; ok {
+		t.Fatal("Mentor excluído permaneceu na base")
+	}
+
+	// Recria um vínculo para confirmar a limpeza integral ao excluir Aluno.
+	cl2 := OnlineClass{ID: "tur-student", Name: "Turma Aluno", TutorID: primary.ID, JoinCode: "STU123", StudentIDs: []string{student.ID}, Scenario: cenariosBase[0]}
+	st.Classes[cl2.ID] = cl2
+	remote.ClassID = cl2.ID
+	remote.Company.TurmaID = cl2.ID
+	st.Companies[remote.ID] = remote
+	if _, err := st.deleteUserAsPrimary(primary, student.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.Users[student.ID]; ok {
+		t.Fatal("Aluno excluído permaneceu na base")
+	}
+	if _, ok := st.Companies[remote.ID]; ok {
+		t.Fatal("empresa do Aluno excluído permaneceu na base")
+	}
+	for _, id := range st.Classes[cl2.ID].StudentIDs {
+		if id == student.ID {
+			t.Fatal("Aluno excluído permaneceu vinculado à turma")
+		}
+	}
+	if _, err := st.deleteUserAsPrimary(primary, primary.ID); err == nil {
+		t.Fatal("Administrador Principal não deveria excluir a própria conta")
+	}
+}
+
+func TestAdminCanListAllClasses(t *testing.T) {
+	st := newServerState(t.TempDir())
+	admin, err := st.createInitialAdmin("Admin", "admin-classes@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mentor, err := st.createUser("Mentor", "mentor-classes@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Classes["tur-admin-list"] = OnlineClass{ID: "tur-admin-list", Name: "Turma Visível", TutorID: mentor.ID, JoinCode: "ABC999", Scenario: cenariosBase[0]}
+	token := st.newSession(admin.ID)
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/classes", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("classes do admin HTTP %d", resp.StatusCode)
+	}
+	var classes []OnlineClass
+	if err := json.NewDecoder(resp.Body).Decode(&classes); err != nil {
+		t.Fatal(err)
+	}
+	if len(classes) != 1 || classes[0].ID != "tur-admin-list" {
+		t.Fatalf("Administrador deveria listar todas as turmas: %#v", classes)
+	}
+}
+
+func TestPrimaryAdminDeleteAPI(t *testing.T) {
+	st := newServerState(t.TempDir())
+	admin, err := st.createInitialAdmin("Admin", "admin-delete-api@example.com", "SenhaAdmin123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	student, err := st.createUser("Aluno API", "aluno-api@example.com", "SenhaAluno123", "aluno")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mentor, err := st.createUser("Mentor API", "mentor-api@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := OnlineClass{ID: "tur-api-delete", Name: "Turma API", TutorID: mentor.ID, JoinCode: "API123", StudentIDs: []string{student.ID}, Scenario: cenariosBase[0]}
+	st.Classes[cl.ID] = cl
+	token := st.newSession(admin.ID)
+	ts := httptest.NewServer(st.handler())
+	defer ts.Close()
+
+	post := func(path string, body any) int {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequest(http.MethodPost, ts.URL+path, &buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if code := post("/api/v1/admin/classes/delete", map[string]string{"class_id": cl.ID}); code != http.StatusOK {
+		t.Fatalf("delete class HTTP %d", code)
+	}
+	if code := post("/api/v1/admin/users/delete", map[string]string{"user_id": student.ID}); code != http.StatusOK {
+		t.Fatalf("delete user HTTP %d", code)
+	}
+	if _, ok := st.Users[student.ID]; ok {
+		t.Fatal("API não removeu o Aluno")
+	}
+}

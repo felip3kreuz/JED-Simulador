@@ -37,11 +37,20 @@ export async function POST(request) {
           role: input.role,
           institution: input.institution,
           institutional_id: input.institutional_id,
+          class_id: input.class_id,
         };
         break;
       case "import_users":
         path = "/api/v1/admin/users/import";
         body = { users: Array.isArray(input.users) ? input.users : [] };
+        break;
+      case "create_class":
+        path = "/api/v1/admin/classes";
+        body = { name: input.name, mentor_id: input.mentor_id };
+        break;
+      case "assign_student_class":
+        path = "/api/v1/admin/students/assign-class";
+        body = { user_id: input.user_id, class_id: input.class_id || "" };
         break;
       case "delete_user":
         path = "/api/v1/admin/users/delete";

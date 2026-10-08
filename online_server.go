@@ -36,6 +36,7 @@ type serverState struct {
 	Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 	Invitations       map[string]serverInvitation       `json:"invitations"`
 	MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
+	NextClassNumber   int                               `json:"next_class_number"`
 	Sessions          map[string]serverSession          `json:"-"`
 }
 
@@ -122,6 +123,7 @@ func newServerState(root string) *serverState {
 		Scenarios:         map[string]OnlineScenario{},
 		Invitations:       map[string]serverInvitation{},
 		MentorInvitations: map[string]serverMentorInvitation{},
+		NextClassNumber:   1,
 		Sessions:          map[string]serverSession{},
 	}
 }
@@ -144,6 +146,7 @@ func (st *serverState) load() error {
 		Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
+		NextClassNumber   int                               `json:"next_class_number"`
 	}
 	if err := json.Unmarshal(b, &disk); err != nil {
 		return err
@@ -165,6 +168,9 @@ func (st *serverState) load() error {
 	}
 	if disk.MentorInvitations != nil {
 		st.MentorInvitations = disk.MentorInvitations
+	}
+	if disk.NextClassNumber > 0 {
+		st.NextClassNumber = disk.NextClassNumber
 	}
 
 	// RC1.6 migration: normalize status and administrative metadata.
@@ -190,7 +196,143 @@ func (st *serverState) load() error {
 		rec.IsPrimaryAdmin = true
 		st.Users[adminIDs[0]] = rec
 	}
+
+	// W7.3 migration: every class receives a stable numeric identifier and
+	// existing class memberships receive permanent enrollment IDs.
+	st.migrateCentralizedClasses()
 	return nil
+}
+
+func (st *serverState) migrateCentralizedClasses() {
+	type classRef struct {
+		ID      string
+		Created string
+	}
+	refs := make([]classRef, 0, len(st.Classes))
+	usedNumbers := map[int]bool{}
+	maxNumber := 0
+	for id, cl := range st.Classes {
+		refs = append(refs, classRef{ID: id, Created: cl.CreatedAt})
+		if cl.Number > 0 {
+			usedNumbers[cl.Number] = true
+			if cl.Number > maxNumber {
+				maxNumber = cl.Number
+			}
+		}
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Created != refs[j].Created {
+			return refs[i].Created < refs[j].Created
+		}
+		return refs[i].ID < refs[j].ID
+	})
+	next := 1
+	for _, ref := range refs {
+		cl := st.Classes[ref.ID]
+		if cl.Number <= 0 {
+			for usedNumbers[next] {
+				next++
+			}
+			cl.Number = next
+			usedNumbers[next] = true
+			if next > maxNumber {
+				maxNumber = next
+			}
+			next++
+		}
+		st.Classes[ref.ID] = cl
+	}
+	if st.NextClassNumber <= maxNumber {
+		st.NextClassNumber = maxNumber + 1
+	}
+	if st.NextClassNumber <= 0 {
+		st.NextClassNumber = 1
+	}
+
+	// Respect any enrollment history already created by W7.3.
+	for id, rec := range st.Users {
+		if rec.Role != "aluno" {
+			continue
+		}
+		for _, enrollment := range rec.Enrollments {
+			if enrollment.StudentNumber <= 0 {
+				continue
+			}
+			if cl, ok := st.Classes[enrollment.ClassID]; ok && enrollment.StudentNumber > cl.NextStudentNumber {
+				cl.NextStudentNumber = enrollment.StudentNumber
+				st.Classes[enrollment.ClassID] = cl
+			}
+		}
+		if rec.EnrollmentStatus == "" {
+			rec.EnrollmentStatus = "waiting"
+			st.Users[id] = rec
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, ref := range refs {
+		cl := st.Classes[ref.ID]
+		for _, studentID := range cl.StudentIDs {
+			rec, ok := st.Users[studentID]
+			if !ok || rec.Role != "aluno" {
+				continue
+			}
+			found := false
+			for _, enrollment := range rec.Enrollments {
+				if enrollment.ClassID == cl.ID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				cl.NextStudentNumber++
+				enrollmentID := fmt.Sprintf("T%dA%d", cl.Number, cl.NextStudentNumber)
+				rec.Enrollments = append(rec.Enrollments, OnlineEnrollment{
+					ClassID: cl.ID, ClassNumber: cl.Number, ClassName: cl.Name,
+					StudentNumber: cl.NextStudentNumber, EnrollmentID: enrollmentID, StartedAt: now,
+				})
+			}
+			// Legacy memberships may contain a student in several classes. The
+			// class with the greatest numeric identifier becomes the current one.
+			if rec.CurrentClassID == "" {
+				rec.CurrentClassID = cl.ID
+				for _, enrollment := range rec.Enrollments {
+					if enrollment.ClassID == cl.ID {
+						rec.EnrollmentID = enrollment.EnrollmentID
+					}
+				}
+			} else if current, ok := st.Classes[rec.CurrentClassID]; !ok || cl.Number > current.Number {
+				rec.CurrentClassID = cl.ID
+				for _, enrollment := range rec.Enrollments {
+					if enrollment.ClassID == cl.ID {
+						rec.EnrollmentID = enrollment.EnrollmentID
+					}
+				}
+			}
+			rec.EnrollmentStatus = "active"
+			st.Users[studentID] = rec
+		}
+		st.Classes[ref.ID] = cl
+	}
+
+	// Close duplicate legacy memberships so exactly one enrollment is current.
+	for id, rec := range st.Users {
+		if rec.Role != "aluno" || rec.CurrentClassID == "" {
+			continue
+		}
+		for i := range rec.Enrollments {
+			if rec.Enrollments[i].ClassID != rec.CurrentClassID && rec.Enrollments[i].EndedAt == "" {
+				rec.Enrollments[i].EndedAt = now
+			}
+		}
+		for classID, cl := range st.Classes {
+			if classID != rec.CurrentClassID && containsStudentID(cl.StudentIDs, id) {
+				cl.StudentIDs = removeStudentID(cl.StudentIDs, id)
+				st.Classes[classID] = cl
+			}
+		}
+		st.Users[id] = rec
+	}
 }
 
 func (st *serverState) saveLocked() error {
@@ -201,7 +343,8 @@ func (st *serverState) saveLocked() error {
 		Scenarios         map[string]OnlineScenario         `json:"scenarios"`
 		Invitations       map[string]serverInvitation       `json:"invitations"`
 		MentorInvitations map[string]serverMentorInvitation `json:"mentor_invitations"`
-	}{st.Users, st.Classes, st.Companies, st.Scenarios, st.Invitations, st.MentorInvitations}
+		NextClassNumber   int                               `json:"next_class_number"`
+	}{st.Users, st.Classes, st.Companies, st.Scenarios, st.Invitations, st.MentorInvitations, st.NextClassNumber}
 
 	b, err := json.MarshalIndent(disk, "", "  ")
 	if err != nil {
@@ -324,6 +467,10 @@ func (st *serverState) createUserProfile(name, email, password, role, institutio
 }
 
 func (st *serverState) createProvisionedUser(actor OnlineUser, name, email, role, institution, institutionalID string) (OnlineUser, error) {
+	return st.createProvisionedUserForClass(actor, name, email, role, institution, institutionalID, "")
+}
+
+func (st *serverState) createProvisionedUserForClass(actor OnlineUser, name, email, role, institution, institutionalID, classID string) (OnlineUser, error) {
 	if actor.Role != "admin" || !activeStatus(actor.Status) {
 		return OnlineUser{}, errors.New("somente administradores podem cadastrar usuários")
 	}
@@ -333,6 +480,18 @@ func (st *serverState) createProvisionedUser(actor OnlineUser, name, email, role
 	}
 	if role != "aluno" && role != "mentor" && role != "admin" {
 		return OnlineUser{}, errors.New("papel inválido")
+	}
+	classID = strings.TrimSpace(classID)
+	if classID != "" && role != "aluno" {
+		return OnlineUser{}, errors.New("turma só pode ser atribuída a contas de Aluno")
+	}
+	if classID != "" {
+		st.mu.RLock()
+		_, exists := st.Classes[classID]
+		st.mu.RUnlock()
+		if !exists {
+			return OnlineUser{}, errors.New("turma não encontrada")
+		}
 	}
 	u, err := st.createUserProfile(name, email, defaultProvisionedPassword, role, institution, institutionalID)
 	if err != nil {
@@ -344,14 +503,184 @@ func (st *serverState) createProvisionedUser(actor OnlineUser, name, email, role
 	if role == "mentor" {
 		rec.CanInviteMentors = false
 	}
+	if role == "aluno" {
+		rec.EnrollmentStatus = "waiting"
+	}
 	st.Users[u.ID] = rec
+	if role == "aluno" && classID != "" {
+		if _, err := st.enrollStudentLocked(u.ID, classID, time.Now().UTC().Format(time.RFC3339)); err != nil {
+			delete(st.Users, u.ID)
+			st.mu.Unlock()
+			return OnlineUser{}, err
+		}
+	}
 	err = st.saveLocked()
+	if current, ok := st.Users[u.ID]; ok {
+		u = current.OnlineUser
+	}
 	st.mu.Unlock()
 	if err != nil {
 		return OnlineUser{}, err
 	}
-	u = rec.OnlineUser
 	return st.deliverAccountCreatedEmail(u, defaultProvisionedPassword), nil
+}
+
+func removeStudentID(ids []string, target string) []string {
+	out := ids[:0]
+	for _, id := range ids {
+		if id != target {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func containsStudentID(ids []string, target string) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
+}
+
+// enrollStudentLocked assigns or transfers a student while st.mu is held.
+// Enrollment numbers are monotonic per class and are never reused.
+func (st *serverState) enrollStudentLocked(userID, classID, when string) (OnlineUser, error) {
+	rec, exists := st.Users[userID]
+	if !exists {
+		return OnlineUser{}, errors.New("aluno não encontrado")
+	}
+	if rec.Role != "aluno" {
+		return OnlineUser{}, errors.New("somente contas de Aluno podem ser vinculadas a turmas")
+	}
+	classID = strings.TrimSpace(classID)
+	if rec.CurrentClassID == classID && classID != "" {
+		return rec.OnlineUser, nil
+	}
+
+	if rec.CurrentClassID != "" {
+		if oldClass, ok := st.Classes[rec.CurrentClassID]; ok {
+			oldClass.StudentIDs = removeStudentID(oldClass.StudentIDs, userID)
+			st.Classes[oldClass.ID] = oldClass
+		}
+		for i := range rec.Enrollments {
+			if rec.Enrollments[i].ClassID == rec.CurrentClassID && rec.Enrollments[i].EndedAt == "" {
+				rec.Enrollments[i].EndedAt = when
+			}
+		}
+	}
+
+	if classID == "" {
+		rec.CurrentClassID = ""
+		rec.EnrollmentID = ""
+		rec.EnrollmentStatus = "waiting"
+		st.Users[userID] = rec
+		return rec.OnlineUser, nil
+	}
+
+	cl, ok := st.Classes[classID]
+	if !ok {
+		return OnlineUser{}, errors.New("turma não encontrada")
+	}
+	if cl.Number <= 0 {
+		return OnlineUser{}, errors.New("turma sem numeração válida")
+	}
+	cl.NextStudentNumber++
+	studentNumber := cl.NextStudentNumber
+	enrollmentID := fmt.Sprintf("T%dA%d", cl.Number, studentNumber)
+	if !containsStudentID(cl.StudentIDs, userID) {
+		cl.StudentIDs = append(cl.StudentIDs, userID)
+	}
+	rec.CurrentClassID = cl.ID
+	rec.EnrollmentID = enrollmentID
+	rec.EnrollmentStatus = "active"
+	rec.Enrollments = append(rec.Enrollments, OnlineEnrollment{
+		ClassID: cl.ID, ClassNumber: cl.Number, ClassName: cl.Name,
+		StudentNumber: studentNumber, EnrollmentID: enrollmentID, StartedAt: when,
+	})
+	st.Classes[cl.ID] = cl
+	st.Users[userID] = rec
+	return rec.OnlineUser, nil
+}
+
+func (st *serverState) assignStudentClass(actor OnlineUser, userID, classID string) (OnlineUser, error) {
+	if actor.Role != "admin" || !activeStatus(actor.Status) {
+		return OnlineUser{}, errors.New("somente administradores podem alterar matrículas")
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	u, err := st.enrollStudentLocked(strings.TrimSpace(userID), strings.TrimSpace(classID), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return OnlineUser{}, err
+	}
+	if err := st.saveLocked(); err != nil {
+		return OnlineUser{}, err
+	}
+	return u, nil
+}
+
+func (st *serverState) resolveClassRef(ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", nil
+	}
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	if _, ok := st.Classes[ref]; ok {
+		return ref, nil
+	}
+	normalized := strings.TrimPrefix(strings.ToUpper(ref), "T")
+	if n, err := strconv.Atoi(normalized); err == nil {
+		for _, cl := range st.Classes {
+			if cl.Number == n {
+				return cl.ID, nil
+			}
+		}
+	}
+	for _, cl := range st.Classes {
+		if strings.EqualFold(strings.TrimSpace(cl.Name), ref) {
+			return cl.ID, nil
+		}
+	}
+	return "", errors.New("turma não encontrada: " + ref)
+}
+
+func (st *serverState) createAdminClass(actor OnlineUser, name, mentorID string) (OnlineClass, error) {
+	if actor.Role != "admin" || !activeStatus(actor.Status) {
+		return OnlineClass{}, errors.New("somente administradores podem criar turmas")
+	}
+	name = strings.TrimSpace(name)
+	mentorID = strings.TrimSpace(mentorID)
+	if name == "" {
+		return OnlineClass{}, errors.New("informe o nome da turma")
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	mentor, ok := st.Users[mentorID]
+	if !ok || !isMentorRole(mentor.Role) || !activeStatus(mentor.Status) {
+		return OnlineClass{}, errors.New("Mentor responsável inválido ou inativo")
+	}
+	for _, existing := range st.Classes {
+		if strings.EqualFold(strings.TrimSpace(existing.Name), name) {
+			return OnlineClass{}, errors.New("já existe uma turma com esse nome")
+		}
+	}
+	number := st.NextClassNumber
+	if number <= 0 {
+		number = 1
+	}
+	st.NextClassNumber = number + 1
+	cl := OnlineClass{
+		ID: "tur-" + randomHex(8), Number: number, Name: name, TutorID: mentorID,
+		StudentIDs: []string{}, NextStudentNumber: 0, Scenario: cenariosBase[0],
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	st.Classes[cl.ID] = cl
+	if err := st.saveLocked(); err != nil {
+		return OnlineClass{}, err
+	}
+	return cl, nil
 }
 
 func (st *serverState) authenticate(email, password string) (OnlineUser, bool) {
@@ -660,17 +989,10 @@ func (st *serverState) deleteUserAsPrimary(actor OnlineUser, userID string) (Onl
 	}
 
 	for id, cl := range st.Classes {
-		if len(cl.StudentIDs) == 0 {
-			continue
+		if containsStudentID(cl.StudentIDs, rec.ID) {
+			cl.StudentIDs = removeStudentID(cl.StudentIDs, rec.ID)
+			st.Classes[id] = cl
 		}
-		kept := cl.StudentIDs[:0]
-		for _, studentID := range cl.StudentIDs {
-			if studentID != rec.ID {
-				kept = append(kept, studentID)
-			}
-		}
-		cl.StudentIDs = kept
-		st.Classes[id] = cl
 	}
 	for id, company := range st.Companies {
 		if company.OwnerID == rec.ID {
@@ -725,7 +1047,30 @@ func (st *serverState) deleteClassAsPrimary(actor OnlineUser, classID string) (O
 			delete(st.Invitations, code)
 		}
 	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
+	for id, rec := range st.Users {
+		if rec.Role != "aluno" {
+			continue
+		}
+		changed := false
+		for i := range rec.Enrollments {
+			if rec.Enrollments[i].ClassID == classID && rec.Enrollments[i].EndedAt == "" {
+				rec.Enrollments[i].EndedAt = now
+				changed = true
+			}
+		}
+		if rec.CurrentClassID == classID {
+			rec.CurrentClassID = ""
+			rec.EnrollmentID = ""
+			rec.EnrollmentStatus = "waiting"
+			changed = true
+		}
+		if changed {
+			st.Users[id] = rec
+		}
+	}
+
 	detached := 0
 	for id, company := range st.Companies {
 		if company.ClassID != classID {
@@ -1103,6 +1448,114 @@ func (st *serverState) handler() http.Handler {
 		writeJSON(w, 200, inv)
 	})
 
+	mux.HandleFunc("/api/v1/admin/classes", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		switch r.Method {
+		case "GET":
+			st.mu.RLock()
+			out := make([]OnlineClass, 0, len(st.Classes))
+			for _, cl := range st.Classes {
+				out = append(out, cl)
+			}
+			st.mu.RUnlock()
+			sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
+			writeJSON(w, 200, out)
+		case "POST":
+			var in struct {
+				Name     string `json:"name"`
+				MentorID string `json:"mentor_id"`
+			}
+			if readJSON(r, &in) != nil {
+				apiErr(w, 400, "JSON inválido")
+				return
+			}
+			cl, err := st.createAdminClass(actor, in.Name, in.MentorID)
+			if err != nil {
+				apiErr(w, 400, err.Error())
+				return
+			}
+			writeJSON(w, 201, cl)
+		default:
+			apiErr(w, 405, "método não permitido")
+		}
+	})
+
+	mux.HandleFunc("/api/v1/admin/students/assign-class", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			UserID  string `json:"user_id"`
+			ClassID string `json:"class_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		u, err := st.assignStudentClass(actor, in.UserID, in.ClassID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, u)
+	})
+
+	mux.HandleFunc("/api/v1/admin/users/delete", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			UserID string `json:"user_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		deleted, err := st.deleteUserAsPrimary(actor, in.UserID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": deleted})
+	})
+
+	mux.HandleFunc("/api/v1/admin/classes/delete", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := st.require(w, r, "admin")
+		if !ok {
+			return
+		}
+		if r.Method != "POST" {
+			apiErr(w, 405, "método não permitido")
+			return
+		}
+		var in struct {
+			ClassID string `json:"class_id"`
+		}
+		if readJSON(r, &in) != nil {
+			apiErr(w, 400, "JSON inválido")
+			return
+		}
+		deleted, detached, err := st.deleteClassAsPrimary(actor, in.ClassID)
+		if err != nil {
+			apiErr(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": deleted, "detached_companies": detached})
+	})
+
 	mux.HandleFunc("/api/v1/admin/users", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			apiErr(w, 405, "método não permitido")
@@ -1167,12 +1620,13 @@ func (st *serverState) handler() http.Handler {
 			Role            string `json:"role"`
 			Institution     string `json:"institution"`
 			InstitutionalID string `json:"institutional_id"`
+			ClassID         string `json:"class_id"`
 		}
 		if readJSON(r, &in) != nil {
 			apiErr(w, 400, "JSON inválido")
 			return
 		}
-		u, err := st.createProvisionedUser(actor, in.Name, in.Email, in.Role, in.Institution, in.InstitutionalID)
+		u, err := st.createProvisionedUserForClass(actor, in.Name, in.Email, in.Role, in.Institution, in.InstitutionalID, in.ClassID)
 		if err != nil {
 			apiErr(w, 400, err.Error())
 			return
@@ -1196,6 +1650,8 @@ func (st *serverState) handler() http.Handler {
 				Role            string `json:"role"`
 				Institution     string `json:"institution"`
 				InstitutionalID string `json:"institutional_id"`
+				ClassID         string `json:"class_id"`
+				ClassRef        string `json:"class_ref"`
 			} `json:"users"`
 		}
 		if readJSON(r, &in) != nil {
@@ -1213,7 +1669,16 @@ func (st *serverState) handler() http.Handler {
 		created := []OnlineUser{}
 		errorsOut := []map[string]any{}
 		for i, row := range in.Users {
-			u, err := st.createProvisionedUser(actor, row.Name, row.Email, row.Role, row.Institution, row.InstitutionalID)
+			classID := strings.TrimSpace(row.ClassID)
+			if classID == "" && strings.TrimSpace(row.ClassRef) != "" {
+				var err error
+				classID, err = st.resolveClassRef(row.ClassRef)
+				if err != nil {
+					errorsOut = append(errorsOut, map[string]any{"row": i + 2, "email": row.Email, "error": err.Error()})
+					continue
+				}
+			}
+			u, err := st.createProvisionedUserForClass(actor, row.Name, row.Email, row.Role, row.Institution, row.InstitutionalID, classID)
 			if err != nil {
 				errorsOut = append(errorsOut, map[string]any{"row": i + 2, "email": row.Email, "error": err.Error()})
 				continue
@@ -1336,54 +1801,6 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, u)
-	})
-
-	mux.HandleFunc("/api/v1/admin/users/delete", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := st.require(w, r, "admin")
-		if !ok {
-			return
-		}
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			UserID string `json:"user_id"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		deleted, err := st.deleteUserAsPrimary(actor, in.UserID)
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 200, map[string]any{"deleted": deleted})
-	})
-
-	mux.HandleFunc("/api/v1/admin/classes/delete", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := st.require(w, r, "admin")
-		if !ok {
-			return
-		}
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			ClassID string `json:"class_id"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		deleted, detached, err := st.deleteClassAsPrimary(actor, in.ClassID)
-		if err != nil {
-			apiErr(w, 400, err.Error())
-			return
-		}
-		writeJSON(w, 200, map[string]any{"deleted": deleted, "detached_companies": detached})
 	})
 
 	mux.HandleFunc("/api/v1/users/student", func(w http.ResponseWriter, r *http.Request) {
@@ -1597,6 +2014,7 @@ func (st *serverState) handler() http.Handler {
 			for _, c := range st.Classes {
 				if u.Role == "admin" {
 					out = append(out, c)
+					continue
 				}
 				if isMentorRole(u.Role) && c.TutorID == u.ID {
 					out = append(out, c)
@@ -1611,74 +2029,19 @@ func (st *serverState) handler() http.Handler {
 				}
 			}
 			st.mu.RUnlock()
+			sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
 			writeJSON(w, 200, out)
 		case "POST":
-			if !isMentorRole(u.Role) {
-				apiErr(w, 403, "somente mentores podem criar turmas")
-				return
-			}
-			var in struct {
-				Name     string  `json:"name"`
-				Scenario Cenario `json:"scenario"`
-			}
-			if readJSON(r, &in) != nil || strings.TrimSpace(in.Name) == "" {
-				apiErr(w, 400, "dados inválidos")
-				return
-			}
-			c := OnlineClass{ID: "tur-" + randomHex(8), Name: strings.TrimSpace(in.Name), TutorID: u.ID, JoinCode: strings.ToUpper(randomHex(3)), StudentIDs: []string{}, Scenario: in.Scenario, CreatedAt: time.Now().UTC().Format(time.RFC3339)}
-			if c.Scenario.Nome == "" {
-				c.Scenario = cenariosBase[0]
-			}
-			st.mu.Lock()
-			st.Classes[c.ID] = c
-			err := st.saveLocked()
-			st.mu.Unlock()
-			if err != nil {
-				apiErr(w, 500, "erro ao salvar turma")
-				return
-			}
-			writeJSON(w, 201, c)
+			apiErr(w, 403, "turmas são criadas e nomeadas exclusivamente por Administradores")
 		default:
 			apiErr(w, 405, "método não permitido")
 		}
 	})
 	mux.HandleFunc("/api/v1/classes/join", func(w http.ResponseWriter, r *http.Request) {
-		u, ok := st.require(w, r, "aluno")
-		if !ok {
+		if _, ok := st.require(w, r, "aluno"); !ok {
 			return
 		}
-		if r.Method != "POST" {
-			apiErr(w, 405, "método não permitido")
-			return
-		}
-		var in struct {
-			Code string `json:"code"`
-		}
-		if readJSON(r, &in) != nil {
-			apiErr(w, 400, "JSON inválido")
-			return
-		}
-		code := strings.ToUpper(strings.TrimSpace(in.Code))
-		st.mu.Lock()
-		defer st.mu.Unlock()
-		for id, c := range st.Classes {
-			if strings.EqualFold(c.JoinCode, code) {
-				found := false
-				for _, sid := range c.StudentIDs {
-					if sid == u.ID {
-						found = true
-					}
-				}
-				if !found {
-					c.StudentIDs = append(c.StudentIDs, u.ID)
-					st.Classes[id] = c
-					_ = st.saveLocked()
-				}
-				writeJSON(w, 200, c)
-				return
-			}
-		}
-		apiErr(w, 404, "código de turma não encontrado")
+		apiErr(w, 403, "o vínculo com turmas é administrado centralmente; procure o Administrador")
 	})
 	mux.HandleFunc("/api/v1/companies", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := st.require(w, r)
@@ -1737,9 +2100,19 @@ func (st *serverState) handler() http.Handler {
 		if exists {
 			rev = prev.Revision + 1
 		}
+		// W7.3: class membership is centrally managed. A company already tied
+		// to a class keeps that historical link after a student transfer; a new
+		// or previously unlinked company inherits the student's current class.
+		classID := ""
+		if exists && prev.ClassID != "" {
+			classID = prev.ClassID
+		} else {
+			classID = u.CurrentClassID
+		}
+		in.Company.TurmaID = classID
 		in.Company.Revision = rev
 		in.Company.UpdatedAt = now
-		rc := RemoteCompany{ID: key, OwnerID: u.ID, ClassID: in.ClassID, Revision: rev, UpdatedAt: now, Company: in.Company}
+		rc := RemoteCompany{ID: key, OwnerID: u.ID, ClassID: classID, Revision: rev, UpdatedAt: now, Company: in.Company}
 		if exists {
 			rc.ApprovalStatus = prev.ApprovalStatus
 			rc.MentorComment = prev.MentorComment
@@ -1825,26 +2198,55 @@ func (st *serverState) handler() http.Handler {
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/classes/")
-		if !strings.HasSuffix(path, "/companies") {
-			apiErr(w, 404, "rota não encontrada")
-			return
-		}
-		classID := strings.TrimSuffix(path, "/companies")
-		st.mu.RLock()
-		cl, exists := st.Classes[classID]
-		if !exists || cl.TutorID != u.ID {
-			st.mu.RUnlock()
-			apiErr(w, 404, "turma não encontrada")
-			return
-		}
-		out := []RemoteCompany{}
-		for _, c := range st.Companies {
-			if c.ClassID == classID {
-				out = append(out, c)
+		if strings.HasSuffix(path, "/companies") {
+			classID := strings.TrimSuffix(path, "/companies")
+			st.mu.RLock()
+			cl, exists := st.Classes[classID]
+			if !exists || cl.TutorID != u.ID {
+				st.mu.RUnlock()
+				apiErr(w, 404, "turma não encontrada")
+				return
 			}
+			out := []RemoteCompany{}
+			for _, c := range st.Companies {
+				if c.ClassID == classID {
+					out = append(out, c)
+				}
+			}
+			st.mu.RUnlock()
+			writeJSON(w, 200, out)
+			return
 		}
-		st.mu.RUnlock()
-		writeJSON(w, 200, out)
+		if strings.HasSuffix(path, "/scenario") {
+			if r.Method != "POST" {
+				apiErr(w, 405, "método não permitido")
+				return
+			}
+			classID := strings.TrimSuffix(path, "/scenario")
+			var scenario Cenario
+			if readJSON(r, &scenario) != nil || strings.TrimSpace(scenario.Nome) == "" {
+				apiErr(w, 400, "cenário inválido")
+				return
+			}
+			st.mu.Lock()
+			cl, exists := st.Classes[classID]
+			if !exists || cl.TutorID != u.ID {
+				st.mu.Unlock()
+				apiErr(w, 404, "turma não encontrada")
+				return
+			}
+			cl.Scenario = scenario
+			st.Classes[classID] = cl
+			err := st.saveLocked()
+			st.mu.Unlock()
+			if err != nil {
+				apiErr(w, 500, "erro ao atualizar cenário da turma")
+				return
+			}
+			writeJSON(w, 200, cl)
+			return
+		}
+		apiErr(w, 404, "rota não encontrada")
 	})
 	return securityMiddleware(mux)
 }

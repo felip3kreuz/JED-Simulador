@@ -589,7 +589,6 @@ button { color: inherit; }
   .evaluation-choice-grid { grid-template-columns: 1fr; }
 }
 
-
 /* W7.3 — exclusão administrativa e filtros de avaliação */
 .state-label.pending {
   border-color: #9a7d21;

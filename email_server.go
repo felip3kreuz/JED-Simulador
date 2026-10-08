@@ -275,6 +275,27 @@ func accountCreatedEmail(u OnlineUser, temporaryPassword string) (string, string
 		name = "usuário"
 	}
 	role := accountRoleLabel(u.Role)
+	enrollment := ""
+	if u.Role == "aluno" {
+		if u.EnrollmentID != "" {
+			className := "Turma"
+			classNumber := 0
+			for _, item := range u.Enrollments {
+				if item.ClassID == u.CurrentClassID && item.EndedAt == "" {
+					className = item.ClassName
+					classNumber = item.ClassNumber
+					break
+				}
+			}
+			if classNumber > 0 {
+				enrollment = fmt.Sprintf("Turma: %s (T%d)\nID da matrícula: %s\n", className, classNumber, u.EnrollmentID)
+			} else {
+				enrollment = fmt.Sprintf("Turma: %s\nID da matrícula: %s\n", className, u.EnrollmentID)
+			}
+		} else {
+			enrollment = "Turma: aguardando vinculação pelo Administrador\n"
+		}
+	}
 	subject := "Seu cadastro no JED Simulador"
 	body := fmt.Sprintf(`Olá, %s.
 
@@ -283,7 +304,7 @@ Seu cadastro no JED Simulador foi realizado por um Administrador.
 Perfil: %s
 E-mail de acesso: %s
 Senha temporária: %s
-
+%s
 Acesse: %s
 
 No primeiro acesso, a plataforma exigirá a substituição da senha temporária por uma senha pessoal com pelo menos 8 caracteres.
@@ -291,7 +312,7 @@ No primeiro acesso, a plataforma exigirá a substituição da senha temporária 
 Não compartilhe sua senha. Se você não esperava este cadastro, entre em contato com a administração da sua instituição.
 
 JED Simulador
-`, name, role, u.Email, temporaryPassword, jedPublicURL())
+`, name, role, u.Email, temporaryPassword, enrollment, jedPublicURL())
 	return subject, body
 }
 

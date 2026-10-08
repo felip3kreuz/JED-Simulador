@@ -47,7 +47,6 @@ export default function StudentWorkspace({ user }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [dialog, setDialog] = useState("");
-  const [joinCode, setJoinCode] = useState("");
   const [newCompany, setNewCompany] = useState({ sector: "", type: "", model: "", name: "", capital: 20000, difficulty: "intermediario", class_id: "", scenario_id: "base-estavel" });
   const [order, setOrder] = useState({ input_id: "", quantity: 10, supplier_id: "padrao", term: 0 });
   const [stockOrder, setStockOrder] = useState({ quantity: 10, term: 0 });
@@ -87,6 +86,7 @@ export default function StudentWorkspace({ user }) {
         setCatalogs(loadedCatalogs);
         setCompanies(nextCompanies);
         setClasses(nextClasses);
+        setNewCompany((current) => ({ ...current, class_id: nextClasses[0]?.id || "" }));
         setSelectedID(nextCompanies[0]?.id || "");
         setCore((current) => ({ ...current, state: "ready", channels, tools }));
       } catch (caught) {
@@ -158,7 +158,7 @@ export default function StudentWorkspace({ user }) {
   async function saveDraft() {
     if (!draft) return;
     setBusy(true); setError(""); setNotice("");
-    try { await syncCompany(draft, selected?.class_id || draft.turma_id || ""); }
+    try { await syncCompany(draft, selected?.class_id || draft.turma_id || classes[0]?.id || ""); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao salvar empresa."); }
     finally { setBusy(false); }
   }
@@ -222,34 +222,6 @@ export default function StudentWorkspace({ user }) {
     finally { setBusy(false); }
   }
 
-  async function linkCompanyToClass(classInfo) {
-    if (!draft || !classInfo) return;
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const next = { ...draft, turma_id: classInfo.id };
-      await syncCompany(next, classInfo.id, true);
-      setNotice(`Empresa ${next.nome} vinculada à turma ${classInfo.name}.`);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao vincular empresa à turma."); }
-    finally { setBusy(false); }
-  }
-
-  async function joinClass(event) {
-    event.preventDefault();
-    const code = joinCode.trim().toUpperCase();
-    if (!code) return;
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const response = await fetch("/api/student/classes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || "Falha ao entrar na turma.");
-      const classesResponse = await fetch("/api/student/classes", { cache: "no-store" });
-      const classesPayload = await classesResponse.json();
-      setClasses(Array.isArray(classesPayload.classes) ? classesPayload.classes : []);
-      setJoinCode(""); setNotice(`Turma vinculada: ${payload.class?.name || "turma informada"}.`);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao entrar na turma."); }
-    finally { setBusy(false); }
-  }
-
   if (loading) return <section className="student-loading">CARREGANDO JED CORE, CATÁLOGOS E SERVIDOR…</section>;
 
   const company = draft;
@@ -267,7 +239,7 @@ export default function StudentWorkspace({ user }) {
 
   function renderEmpresa() {
     if (!company) return <><section className="orbit-overview-strip"><div><span>EMPRESA</span><strong>NENHUM EMPREENDIMENTO CRIADO</strong><small>Crie sua empresa diretamente no navegador usando o catálogo oficial do JED.</small></div><div className="orbit-stat-row"><div><span>TURMAS</span><strong>{classes.length}</strong></div><div><span>CORE</span><strong>{core.state === "ready" ? "OK" : "—"}</strong></div></div></section>{companyToolbar()}<RequireCompany onCreate={() => setDialog("company")} /></>;
-    return <><section className="student-company-head"><div><p className="eyebrow">MINHA EMPRESA</p><h1>{company.nome}</h1><p className="lede">{company.setor} → {company.tipo_negocio} → {company.especialidade}</p></div><div><span className="technical-label">SEMANA</span><strong className="big-week">{company.semana || 0}/{company.duracao_semanas || "—"}</strong></div></section>{companyToolbar()}<section className="student-metrics-grid"><Metric label="Caixa" value={money.format(Number(company.caixa || 0))} /><Metric label="Preço" value={money.format(Number(company.preco || 0))} /><Metric label="Clientes ativos" value={integer.format(Number(company.clientes_ativos || 0))} /><Metric label="Reputação" value={number.format(Number(company.reputacao || 0))} /><Metric label="Receita acumulada" value={indicators ? money.format(Number(indicators.Receita || 0)) : "…"} /><Metric label="Resultado acumulado" value={indicators ? money.format(Number(indicators.Resultado || 0)) : "…"} /><Metric label="Score JED" value={score ? number.format(Number(score.Total || 0)) : "…"} detail="motor Go/WASM" /><Metric label="Revisão" value={`#${selected?.revision || company.revision || 0}`} detail={fmtDate(selected?.updated_at || company.updated_at)} /></section><section className="workspace-two-col"><article className="workspace-card"><p className="eyebrow">IDENTIDADE</p><h2>Configuração do empreendimento</h2><dl className="student-data-list"><DataRow label="Responsável" value={company.responsavel} /><DataRow label="Cenário" value={company.cenario} /><DataRow label="Dificuldade" value={company.dificuldade} /><DataRow label="Capital próprio" value={money.format(Number(company.capital_proprio || 0))} /><DataRow label="Capacidade base" value={integer.format(Number(company.capacidade_base || 0))} /><DataRow label="Concorrência" value={company.concorrencia_nivel} /></dl></article><article className="workspace-card"><p className="eyebrow">ÚLTIMA RODADA</p><h2>{last ? `Semana ${last.semana}` : "Aguardando primeira semana"}</h2>{last ? <dl className="student-data-list"><DataRow label="Vendas" value={last.vendas} /><DataRow label="Receita" value={money.format(Number(last.receita || 0))} /><DataRow label="Resultado" value={money.format(Number(last.resultado || 0))} /><DataRow label="Evento" value={last.evento || "Nenhum"} /></dl> : <p className="student-muted">Complete Persona, Lean Canvas e decisões e então processe a primeira semana.</p>}</article></section><article className="workspace-card mentor-evaluation-card"><div className="evaluation-card-head"><div><p className="eyebrow">AVALIAÇÃO DO MENTOR</p><h2>Parecer sobre o empreendimento</h2></div>{selected?.approval_status === "aprovado" ? <span className="state-label approved">APROVADO</span> : selected?.approval_status === "reprovado" ? <span className="state-label rejected">REPROVADO</span> : <span className="state-label pending">PENDENTE</span>}</div>{selected?.approval_status ? <><p className="mentor-evaluation-comment">{selected?.mentor_comment || "O Mentor não registrou comentários adicionais."}</p><small className="student-muted">{selected?.evaluated_by_name || "Mentor"} · {fmtDate(selected?.evaluated_at)}</small></> : <p className="student-muted">A avaliação deste empreendimento está pendente.</p>}</article></>;
+    return <><section className="student-company-head"><div><p className="eyebrow">MINHA EMPRESA</p><h1>{company.nome}</h1><p className="lede">{company.setor} → {company.tipo_negocio} → {company.especialidade}</p></div><div><span className="technical-label">SEMANA</span><strong className="big-week">{company.semana || 0}/{company.duracao_semanas || "—"}</strong></div></section>{companyToolbar()}<section className="student-metrics-grid"><Metric label="Caixa" value={money.format(Number(company.caixa || 0))} /><Metric label="Preço" value={money.format(Number(company.preco || 0))} /><Metric label="Clientes ativos" value={integer.format(Number(company.clientes_ativos || 0))} /><Metric label="Reputação" value={number.format(Number(company.reputacao || 0))} /><Metric label="Receita acumulada" value={indicators ? money.format(Number(indicators.Receita || 0)) : "…"} /><Metric label="Resultado acumulado" value={indicators ? money.format(Number(indicators.Resultado || 0)) : "…"} /><Metric label="Score JED" value={score ? number.format(Number(score.Total || 0)) : "…"} detail="motor Go/WASM" /><Metric label="Revisão" value={`#${selected?.revision || company.revision || 0}`} detail={fmtDate(selected?.updated_at || company.updated_at)} /></section><section className="workspace-two-col"><article className="workspace-card"><p className="eyebrow">IDENTIDADE</p><h2>Configuração do empreendimento</h2><dl className="student-data-list"><DataRow label="Responsável" value={company.responsavel} /><DataRow label="Cenário" value={company.cenario} /><DataRow label="Dificuldade" value={company.dificuldade} /><DataRow label="Capital próprio" value={money.format(Number(company.capital_proprio || 0))} /><DataRow label="Capacidade base" value={integer.format(Number(company.capacidade_base || 0))} /><DataRow label="Concorrência" value={company.concorrencia_nivel} /></dl></article><article className="workspace-card"><p className="eyebrow">ÚLTIMA RODADA</p><h2>{last ? `Semana ${last.semana}` : "Aguardando primeira semana"}</h2>{last ? <dl className="student-data-list"><DataRow label="Vendas" value={last.vendas} /><DataRow label="Receita" value={money.format(Number(last.receita || 0))} /><DataRow label="Resultado" value={money.format(Number(last.resultado || 0))} /><DataRow label="Evento" value={last.evento || "Nenhum"} /></dl> : <p className="student-muted">Complete Persona, Lean Canvas e decisões e então processe a primeira semana.</p>}</article></section><article className="workspace-card mentor-evaluation-card"><div className="evaluation-card-head"><div><p className="eyebrow">AVALIAÇÃO DO MENTOR</p><h2>Parecer sobre o empreendimento</h2></div>{selected?.approval_status === "aprovado" ? <span className="state-label approved">APROVADO</span> : selected?.approval_status === "reprovado" ? <span className="state-label rejected">REPROVADO</span> : <span className="state-label used">NÃO AVALIADO</span>}</div>{selected?.approval_status ? <><p className="mentor-evaluation-comment">{selected?.mentor_comment || "O Mentor não registrou comentários adicionais."}</p><small className="student-muted">{selected?.evaluated_by_name || "Mentor"} · {fmtDate(selected?.evaluated_at)}</small></> : <p className="student-muted">O Mentor ainda não classificou este empreendimento.</p>}</article></>;
   }
 
   function renderPersona() {
@@ -326,7 +298,7 @@ export default function StudentWorkspace({ user }) {
   }
 
   function renderTurmas() {
-    return <><div className="workspace-section-head"><div><p className="eyebrow">TURMAS</p><h2>Vínculos online</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div><form className="inline-form class-join-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="CÓDIGO DA TURMA" /><button className="primary-button" disabled={busy || !joinCode.trim()}>ENTRAR NA TURMA</button></form><div className="class-grid">{classes.length ? classes.map((cl) => <article className="workspace-card" key={cl.id}><p className="eyebrow">TURMA</p><h3>{cl.name}</h3><dl className="student-data-list"><DataRow label="Código" value={cl.join_code} /><DataRow label="Cenário" value={cl.scenario?.nome || "Mercado estável"} /><DataRow label="Duração" value={`${cl.scenario?.duracao || 12} semanas`} /><DataRow label="Dificuldade" value={cl.scenario?.dificuldade || "intermediario"} /></dl>{company ? <button type="button" className={selected?.class_id === cl.id || company.turma_id === cl.id ? "secondary-button" : "primary-button"} disabled={busy || selected?.class_id === cl.id || company.turma_id === cl.id} onClick={() => linkCompanyToClass(cl)}>{selected?.class_id === cl.id || company.turma_id === cl.id ? "EMPRESA VINCULADA" : "VINCULAR EMPRESA ATUAL"}</button> : null}</article>) : <article className="workspace-card"><p className="student-muted">Nenhuma turma vinculada. Digite o código fornecido pelo Mentor.</p></article>}</div></>;
+    return <><div className="workspace-section-head"><div><p className="eyebrow">TURMA</p><h2>Vínculo administrativo</h2></div><span className="section-count">{classes.length ? "ATIVO" : "AGUARDANDO"}</span></div><p className="section-help">A turma é definida pelo Administrador. Não é necessário inserir código nem aceitar convite.</p><div className="class-grid">{classes.length ? classes.map((cl) => <article className="workspace-card" key={cl.id}><p className="eyebrow">T{cl.number || "—"}</p><h3>{cl.name}</h3><dl className="student-data-list"><DataRow label="Matrícula" value={cl.id === user.current_class_id ? user.enrollment_id || "—" : "Histórico"} /><DataRow label="Cenário" value={cl.scenario?.nome || "Mercado estável"} /><DataRow label="Duração" value={`${cl.scenario?.duracao || 12} semanas`} /><DataRow label="Dificuldade" value={cl.scenario?.dificuldade || "intermediario"} /></dl></article>) : <article className="workspace-card"><p className="eyebrow">AGUARDANDO TURMA</p><h3>Seu cadastro ainda não foi vinculado a uma turma.</h3><p className="student-muted">O Administrador fará o vínculo e o JED gerará automaticamente sua matrícula.</p></article>}</div></>;
   }
 
   const view = activeView === "empresa" ? renderEmpresa() : activeView === "persona" ? renderPersona() : activeView === "canvas" ? renderCanvas() : activeView === "digital" ? renderDigital() : activeView === "decisoes" ? renderDecisoes() : activeView === "insumos" ? renderInsumos() : activeView === "financeiro" ? renderFinanceiro() : activeView === "indicadores" ? renderIndicadores() : activeView === "jornada" ? renderJornada() : renderTurmas();
@@ -344,8 +316,8 @@ export default function StudentWorkspace({ user }) {
         <label>ESPECIALIDADE<select value={newCompany.model} onChange={(e) => setNewCompany({ ...newCompany, model: e.target.value })}>{models.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
         {currentModel ? <div className="catalog-preview"><div><span>PREÇO REF.</span><strong>{money.format(Number(currentModel.preco_ref || 0))}</strong></div><div><span>CAPACIDADE</span><strong>{integer.format(Number(currentModel.capacidade_base || 0))}/sem.</strong></div><div><span>CUSTO UNIT.</span><strong>{money.format(Number(currentModel.custo_unitario || 0))}</strong></div></div> : null}
         <div className="orbit-form-two"><label>NOME DA EMPRESA<input value={newCompany.name} onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })} placeholder={currentModel?.nome || "Minha empresa"} required /></label><label>CAPITAL PRÓPRIO<input type="number" min="0" step="100" value={newCompany.capital} onChange={(e) => setNewCompany({ ...newCompany, capital: e.target.value })} required /></label></div>
-        <div className="orbit-form-two"><label>DIFICULDADE<select value={newCompany.difficulty} onChange={(e) => setNewCompany({ ...newCompany, difficulty: e.target.value })}><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></label><label>TURMA (OPCIONAL)<select value={newCompany.class_id} onChange={(e) => setNewCompany({ ...newCompany, class_id: e.target.value })}><option value="">Sem turma</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
-        {!newCompany.class_id ? <label>CENÁRIO<select value={newCompany.scenario_id} onChange={(e) => setNewCompany({ ...newCompany, scenario_id: e.target.value })}>{baseScenarios.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label> : <div className="activation-note"><strong>CENÁRIO</strong><span>A empresa usará o cenário definido pela turma selecionada.</span></div>}
+        <label>DIFICULDADE<select value={newCompany.difficulty} onChange={(e) => setNewCompany({ ...newCompany, difficulty: e.target.value })}><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></label>
+        {classes[0] ? <div className="activation-note"><strong>TURMA / MATRÍCULA</strong><span>T{classes[0].number} · {classes[0].name} · {user.enrollment_id || "matrícula administrativa"}. A empresa usará o cenário definido pela turma.</span></div> : <><div className="activation-note"><strong>AGUARDANDO TURMA</strong><span>O Administrador ainda não vinculou sua conta a uma turma. A empresa poderá ser criada sem vínculo e associada posteriormente.</span></div><label>CENÁRIO<select value={newCompany.scenario_id} onChange={(e) => setNewCompany({ ...newCompany, scenario_id: e.target.value })}>{baseScenarios.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label></>}
         {error ? <div className="form-error">{error}</div> : null}
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog("")}>CANCELAR</button><button className="primary-button" disabled={busy || !newCompany.model}>{busy ? "CRIANDO…" : "CRIAR EMPRESA"}</button></div>
       </form>

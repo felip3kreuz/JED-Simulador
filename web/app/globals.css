@@ -508,3 +508,83 @@ button { color: inherit; }
 .auth-link-row .secondary-button { display: grid; place-items: center; text-decoration: none; text-align: center; }
 .orbit-command[href] { cursor: pointer; }
 @media (max-width: 640px) { .auth-link-row { grid-template-columns: 1fr; } }
+
+/* W7.2 — avaliação pedagógica do Mentor */
+.state-label.approved {
+  border-color: #16875f;
+  color: #116849;
+  background: rgba(22, 135, 95, 0.08);
+}
+.state-label.rejected {
+  border-color: #ad3d3d;
+  color: #8f2f2f;
+  background: rgba(173, 61, 61, 0.08);
+}
+.compact-button {
+  min-height: 34px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+.mentor-comment-cell {
+  min-width: 240px;
+  max-width: 360px;
+}
+.mentor-comment-cell span,
+.mentor-comment-cell small {
+  display: block;
+}
+.mentor-comment-cell span {
+  white-space: normal;
+  line-height: 1.45;
+}
+.mentor-comment-cell small {
+  margin-top: 5px;
+  opacity: 0.68;
+}
+.evaluation-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.evaluation-choice {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line, #c9cdd2);
+  padding: 14px;
+  cursor: pointer;
+}
+.evaluation-choice input {
+  width: auto;
+  justify-self: start;
+}
+.evaluation-choice.selected {
+  border-width: 2px;
+}
+.evaluation-choice span {
+  font-size: 0.84rem;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+.field-hint {
+  display: block;
+  margin-top: -8px;
+  text-align: right;
+  opacity: 0.62;
+}
+.mentor-evaluation-card {
+  margin-top: 18px;
+}
+.evaluation-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+.mentor-evaluation-comment {
+  margin: 18px 0 8px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+@media (max-width: 760px) {
+  .evaluation-choice-grid { grid-template-columns: 1fr; }
+}

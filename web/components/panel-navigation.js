@@ -3,11 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const navigation = {
-  admin: [
-    ["visao-geral", "VISÃO GERAL", "contas e estado"],
-    ["usuarios", "USUÁRIOS", "acesso e permissões"],
-    ["importacao", "IMPORTAR CSV", "cadastro em lote"],
-  ],
+  admin: [],
   mentor: [
     ["visao-geral", "VISÃO GERAL", "turmas e resultados"],
     ["cenarios", "CENÁRIOS", "ambientes pedagógicos"],
@@ -54,6 +50,8 @@ export default function PanelNavigation({ role }) {
       if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   }
+
+  if (!items.length) return null;
 
   return (
     <nav>

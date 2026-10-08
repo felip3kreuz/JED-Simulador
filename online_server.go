@@ -478,7 +478,7 @@ func (st *serverState) redeemInvitation(code, password string) (OnlineLoginRespo
 	}
 	id := "usr-" + randomHex(8)
 	salt := randomHex(16)
-	u := OnlineUser{ID: id, Name: inv.Name, Email: inv.Email, Role: "aluno", Status: "active", CreatedAt: time.Now().UTC().Format(time.RFC3339)}
+	u := OnlineUser{ID: id, Name: inv.Name, Email: inv.Email, Role: "aluno", Status: "active", InstitutionalID: inv.InstitutionalID, CreatedAt: time.Now().UTC().Format(time.RFC3339)}
 	st.Users[id] = serverUserRecord{OnlineUser: u, Salt: salt, Hash: passwordHash(password, salt)}
 	cl := st.Classes[inv.ClassID]
 	cl.StudentIDs = append(cl.StudentIDs, id)

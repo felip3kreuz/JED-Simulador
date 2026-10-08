@@ -121,3 +121,7 @@ JED_Servidor.exe --configure-email
 
 O arquivo `servidor_email.json`, que pode conter uma senha SMTP, é local e está
 excluído do repositório por `.gitignore`.
+
+## Web W6.1 — cadastro e interface Órbita Clean
+
+A W6.1 adiciona cadastro/ativação Web completos para Aluno e Mentor, preserva ativação de convite individual e reformula Login, Administrador, Mentor e Aluno para seguir a identidade visual da interface Windows. Consulte `docs/W6_1_ONBOARDING_UI.md`.

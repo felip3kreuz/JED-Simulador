@@ -119,3 +119,41 @@ func TestRegistrationAPIFlow(t *testing.T) {
 		t.Fatalf("resposta de mentor inválida: %#v", mentor)
 	}
 }
+
+func TestStudentInvitationCreatesPasswordAndPreservesInstitutionalID(t *testing.T) {
+	st := newServerState(t.TempDir())
+	mentor, err := st.createUser("Mentor Teste", "mentor@example.com", "SenhaMentor123", "mentor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	class := OnlineClass{ID: "tur-test", Name: "Turma Teste", TutorID: mentor.ID, JoinCode: "ABC123", StudentIDs: []string{}, Scenario: cenariosBase[0]}
+	st.Classes[class.ID] = class
+	inv, err := st.createInvitation(mentor, class.ID, "Aluno Convidado", "convite@example.com", "MAT-009")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := st.redeemInvitation(inv.Code, "SenhaAluno123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.User.Role != "aluno" {
+		t.Fatalf("papel esperado aluno; recebido %q", out.User.Role)
+	}
+	if out.Token == "" {
+		t.Fatal("ativação do convite deve abrir uma sessão")
+	}
+	if out.User.InstitutionalID != "MAT-009" {
+		t.Fatalf("ID institucional do convite não preservado: %q", out.User.InstitutionalID)
+	}
+	joined := st.Classes[class.ID]
+	found := false
+	for _, id := range joined.StudentIDs {
+		if id == out.User.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("Aluno ativado pelo convite deveria estar vinculado à turma")
+	}
+}

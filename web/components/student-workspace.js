@@ -35,6 +35,7 @@ export default function StudentWorkspace({ user }) {
   const [processed, setProcessed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -139,20 +140,47 @@ export default function StudentWorkspace({ user }) {
 
   async function joinClass(event) {
     event.preventDefault(); setError(""); setNotice("");
+    const code = joinCode.trim().toUpperCase();
+    if (!code) { setError("Informe o código da turma."); return; }
+    setJoining(true);
     try {
-      const response = await fetch("/api/student/classes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: joinCode }) });
+      const response = await fetch("/api/student/classes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Falha ao entrar na turma.");
-      setJoinCode(""); setNotice(`Você entrou na turma ${payload.class?.name || "informada"}.`);
+      setJoinCode("");
       const classesResponse = await fetch("/api/student/classes", { cache: "no-store" });
       const classesPayload = await classesResponse.json();
       if (classesResponse.ok) setClasses(Array.isArray(classesPayload.classes) ? classesPayload.classes : []);
+      setNotice(`Turma vinculada: ${payload.class?.name || "turma informada"}.`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao entrar na turma."); }
+    finally { setJoining(false); }
+  }
+
+  function membershipBlock() {
+    return <div className="class-membership"><div>{classes.length ? classes.map((cl) => <span className="membership-pill" key={cl.id}>{cl.name} · {cl.join_code}</span>) : <span className="student-muted">Nenhuma turma vinculada.</span>}</div><form className="inline-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Código da turma" autoCapitalize="characters" required /><button className="secondary-button" disabled={joining || !joinCode.trim()}>{joining ? "Entrando…" : "Entrar em turma"}</button></form></div>;
   }
 
   if (loading) return <section className="student-loading">Carregando dados do JED Servidor…</section>;
 
-  if (!companies.length) return <><section id="empresa" className="student-empty"><p className="eyebrow">Sem empresa sincronizada</p><h2>Esta conta ainda não possui uma empresa no servidor.</h2><p>Use a versão Windows para criar/sincronizar a empresa inicial ou entre em uma turma abaixo.</p><form className="inline-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Código da turma" /><button className="primary-button">Entrar na turma</button></form></section>{error ? <div className="workspace-alert workspace-alert-error">{error}</div> : null}</>;
+  if (!companies.length) return <>
+    <section id="empresa" className="student-empty orbit-section">
+      <p className="eyebrow">Minha empresa</p>
+      <h2>Esta conta ainda não possui uma empresa sincronizada.</h2>
+      <p>O vínculo com uma turma e a empresa são estados separados. Você pode entrar em uma turma agora; para liberar decisões e processamento, sincronize uma empresa criada na versão Windows.</p>
+      {classes.length ? <p className="student-muted"><strong>{classes.length} turma(s) vinculada(s).</strong> O vínculo já está ativo no servidor.</p> : null}
+    </section>
+    {error ? <div className="workspace-alert workspace-alert-error">ERRO · {error}</div> : null}
+    {notice ? <div className="workspace-alert workspace-alert-success">OK · {notice}</div> : null}
+    <section id="decisoes" className="workspace-section orbit-section">
+      <div className="workspace-section-head"><div><p className="eyebrow">Decisões</p><h2>Próxima semana</h2></div><span className="section-count">AGUARDANDO EMPRESA</span></div>
+      <article className="workspace-card"><p className="student-muted">As decisões ficam disponíveis assim que uma empresa pertencente a esta conta for sincronizada com o JED Servidor. Nenhuma decisão pode ser processada sem uma empresa-base.</p></article>
+    </section>
+    <section id="turmas" className="workspace-section orbit-section">
+      <div className="workspace-section-head"><div><p className="eyebrow">Turmas</p><h2>Vínculos online</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div>
+      <p className="section-help">Digite o código exibido pelo Mentor. Quando a operação for aceita, a turma aparecerá imediatamente abaixo e continuará vinculada após sair e entrar novamente.</p>
+      {membershipBlock()}
+    </section>
+  </>;
 
   const remote = selected; const company = draft || remote.company || {}; const indicators = core.indicators; const score = core.score;
   const last = company.historico?.length ? company.historico[company.historico.length - 1] : null;
@@ -175,6 +203,6 @@ export default function StudentWorkspace({ user }) {
       <article className="workspace-card process-card"><p className="eyebrow">Rodada</p><h2>Processar e sincronizar</h2><p className="student-muted">O processamento ocorre localmente no navegador pelo mesmo motor Go da versão Windows. Depois, a empresa é enviada ao JED Servidor.</p>{last ? <dl className="student-data-list"><div><dt>Última semana</dt><dd>{last.semana}</dd></div><div><dt>Vendas</dt><dd>{integer.format(Number(last.vendas || 0))}</dd></div><div><dt>Receita</dt><dd>{money.format(Number(last.receita || 0))}</dd></div><div><dt>Resultado</dt><dd>{money.format(Number(last.resultado || 0))}</dd></div><div><dt>Evento</dt><dd>{last.evento || "Nenhum"}</dd></div></dl> : null}<div className="process-actions"><button className="primary-button" onClick={processWeek} disabled={disabled || core.state !== "ready" || (duration > 0 && week >= duration)}>{processed ? "Semana processada" : "Processar semana"}</button><button className="secondary-button" onClick={syncCompany} disabled={!dirty || syncing}>{syncing ? "Sincronizando…" : "Sincronizar com servidor"}</button></div>{dirty ? <small className="draft-note">Rascunho protegido no armazenamento local deste navegador.</small> : null}</article>
     </section>
 
-    <section id="turmas" className="workspace-section orbit-section"><div className="workspace-section-head"><div><p className="eyebrow">Turmas</p><h2>Vínculos</h2></div></div><div className="class-membership"><div>{classes.length ? classes.map((cl) => <span className="membership-pill" key={cl.id}>{cl.name} · {cl.join_code}</span>) : <span className="student-muted">Nenhuma turma vinculada.</span>}</div><form className="inline-form" onSubmit={joinClass}><input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="Código da turma" /><button className="secondary-button">Entrar em turma</button></form></div></section>
+    <section id="turmas" className="workspace-section orbit-section"><div className="workspace-section-head"><div><p className="eyebrow">Turmas</p><h2>Vínculos</h2></div><span className="section-count">{classes.length} VÍNCULO(S)</span></div>{membershipBlock()}</section>
   </>;
 }
